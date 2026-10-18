@@ -10,13 +10,20 @@ type Screen =
 
 type Availability = Status | "connecting" | "disconnected";
 
-const statusText: Record<Availability, string> = {
-  connecting: "Connecting…",
-  unavailable: "Not available right now",
-  available: "Ready for a call",
-  "in-call": "In a call",
-  disconnected: "Lost connection. Reload the page to try again.",
-};
+function statusText(availability: Availability, name: string): string {
+  switch (availability) {
+    case "connecting":
+      return "Connecting…";
+    case "unavailable":
+      return `${name} isn't available right now`;
+    case "available":
+      return `${name} is ready for a call`;
+    case "in-call":
+      return `${name} is in a call`;
+    case "disconnected":
+      return "Lost connection. Reload the page to try again.";
+  }
+}
 
 /**
  * The caller (family) view. Idle shows the receiver's availability, and "Join
@@ -25,6 +32,8 @@ const statusText: Record<Availability, string> = {
  */
 export function mountCaller(
   root: HTMLElement,
+  /** What the receiver is called, e.g. "Grandma". */
+  displayName: string,
   connect: (onEvent: (event: CallerEvent) => void) => CallerSession,
 ): void {
   let availability: Availability = "connecting";
@@ -45,7 +54,7 @@ export function mountCaller(
           render({ screen: "joining" });
           session.join();
         });
-        const elements = [element("p", statusText[availability]), join];
+        const elements = [element("p", statusText(availability, displayName)), join];
         return screen.message ? [...elements, element("p", screen.message)] : elements;
       }
       case "joining":

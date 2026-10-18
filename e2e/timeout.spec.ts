@@ -6,13 +6,13 @@ test("if nobody calls, the receiver goes back to idle and becomes unavailable", 
   receiver,
   caller,
 }) => {
-  await caller.goto(`/${group}/?role=caller`);
-  await receiver.goto(`/${group}/?role=receiver`);
+  await caller.goto(`/${group}/`);
+  await receiver.goto(`/${group}/`);
   await receiver.getByRole("button", { name: "Join call" }).click();
-  await expect(caller.getByText("Ready for a call")).toBeVisible();
+  await expect(caller.getByText("Grandma is ready for a call")).toBeVisible();
 
   await expect(receiver.getByText("No calls just now.")).toBeVisible({ timeout: 15_000 });
   await expect(receiver.getByRole("button", { name: "Join call" })).toBeVisible();
   await expect(receiver.locator("video")).toHaveCount(0);
-  await expect(caller.getByText("Not available right now")).toBeVisible();
+  await expect(caller.getByText("Grandma isn't available right now")).toBeVisible();
 });

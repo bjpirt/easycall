@@ -11,7 +11,7 @@ beforeEach(() => {
   root = document.createElement("main");
   session.join.mockClear();
   session.hangUp.mockClear();
-  mountCaller(root, (onEvent) => {
+  mountCaller(root, "Grandma", (onEvent) => {
     emit = onEvent;
     return session;
   });
@@ -28,9 +28,9 @@ describe("caller view", () => {
   });
 
   it.each([
-    ["unavailable", "Not available right now", true],
-    ["available", "Ready for a call", false],
-    ["in-call", "In a call", true],
+    ["unavailable", "Grandma isn't available right now", true],
+    ["available", "Grandma is ready for a call", false],
+    ["in-call", "Grandma is in a call", true],
   ] as [Status, string, boolean][])(
     "when %s shows '%s' (Join call disabled: %s)",
     (status, text, disabled) => {
@@ -89,7 +89,7 @@ describe("caller view", () => {
 
     emit({ type: "call-ended" });
 
-    expect(root.textContent).toBe("Not available right now" + "Join call");
+    expect(root.textContent).toBe("Grandma isn't available right now" + "Join call");
     expect(button("Join call")?.disabled).toBe(true);
   });
 

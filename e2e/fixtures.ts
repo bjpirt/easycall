@@ -1,26 +1,31 @@
 import { test as base, type Browser, type Page } from "@playwright/test";
 import { cookieName, sessionToken } from "../src/worker/session";
-import { baseURL, e2eSessionSecret } from "./config";
+import { baseURL, e2eSessionSecret, users } from "./config";
 
 interface Fixtures {
   /** This test's group: one per parallel worker, so concurrent tests never share a room. */
   group: string;
+  /** Pages signed in as the group's receiver, a caller and another caller. */
   receiver: Page;
   caller: Page;
   otherCaller: Page;
 }
 
-/** A page in its own browser context (like a separate device) with camera and mic allowed. */
-async function peer(
-  { browser, baseURL }: { browser: Browser; baseURL: string | undefined },
-  use: (page: Page) => Promise<void>,
-): Promise<void> {
-  const context = await browser.newContext({
-    ...(baseURL && { baseURL }),
-    permissions: ["camera", "microphone"],
-  });
-  await use(await context.newPage());
-  await context.close();
+/**
+ * A page in its own browser context (like a separate device), signed in as
+ * `email`, with camera and mic allowed.
+ */
+function signedInPage(email: string) {
+  return async (
+    { browser }: { browser: Browser },
+    use: (page: Page) => Promise<void>,
+  ): Promise<void> => {
+    const context = await browser.newContext({ baseURL, permissions: ["camera", "microphone"] });
+    const page = await context.newPage();
+    await signIn(page, email);
+    await use(page);
+    await context.close();
+  };
 }
 
 export const test = base.extend<Fixtures>({
@@ -28,9 +33,9 @@ export const test = base.extend<Fixtures>({
   group: async ({}, use, testInfo) => {
     await use(`e2e-${String(testInfo.parallelIndex)}`);
   },
-  receiver: peer,
-  caller: peer,
-  otherCaller: peer,
+  receiver: signedInPage(users.receiver),
+  caller: signedInPage(users.caller),
+  otherCaller: signedInPage(users.otherCaller),
 });
 
 /** Signs a page's browser context in as `email`, as if they'd been through the login. */

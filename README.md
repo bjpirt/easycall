@@ -32,9 +32,9 @@ npx playwright install chromium   # browser for end-to-end tests
 npm run dev
 ```
 
-Then open <http://localhost:8787/dev/?role=receiver> in one tab and
-<http://localhost:8787/dev/?role=caller> in another to make a call. (The `?role=` switch is temporary,
-until sign-in is built.)
+To make a call locally, use two browser profiles (or a normal and a private window). Sign in
+at <http://localhost:8787/dev-login> as `receiver@example.com` in one and `caller@example.com` in
+the other, then open <http://localhost:8787/dev/> in both.
 
 ## Deploying
 

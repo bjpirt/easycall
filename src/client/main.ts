@@ -1,6 +1,9 @@
+import { roomRole } from "../shared/roles";
 import { connectCaller } from "./caller-session";
 import { mountCaller } from "./caller-view";
+import { element } from "./dom";
 import { fetchIceServers } from "./ice";
+import { fetchMe } from "./me";
 import { createPeer } from "./peer";
 import { receiverStarter } from "./receiver-session";
 import { mountReceiver } from "./receiver-view";
@@ -10,29 +13,52 @@ import "./style.css";
 const root = document.querySelector<HTMLElement>("#app");
 if (!root) throw new Error("Missing #app");
 
-const page = new URL(location.href);
-const deps = {
-  getCamera: () => navigator.mediaDevices.getUserMedia({ video: true, audio: true }),
-  getIceServers: () => fetchIceServers(),
-  createPeer,
-};
+/** Asks who we are in this group, then shows the receiver or caller view. */
+async function start(root: HTMLElement): Promise<void> {
+  const page = new URL(location.href);
+  const result = await fetchMe(page);
 
-// Dev-only role switch until real identity arrives (step 15).
-switch (page.searchParams.get("role")) {
-  case "receiver":
+  switch (result.type) {
+    case "signed-out": {
+      const signIn = element("a", "Sign in");
+      signIn.href = `/login?next=${encodeURIComponent(page.pathname)}`;
+      showMessage(root, "Please sign in to continue.", signIn);
+      return;
+    }
+    case "not-member":
+      showMessage(
+        root,
+        "You're not a member of this group. Check the link, or ask whoever sent it.",
+      );
+      return;
+    case "error":
+      showMessage(root, "Something went wrong. Please reload the page.");
+      return;
+    case "member":
+      break;
+  }
+
+  const { role, displayName } = result.me;
+  const deps = {
+    getCamera: () => navigator.mediaDevices.getUserMedia({ video: true, audio: true }),
+    getIceServers: () => fetchIceServers(),
+    createPeer,
+  };
+  if (roomRole(role) === "receiver") {
     mountReceiver(
       root,
       receiverStarter({ ...deps, connect: () => new WebSocket(roomUrl(page, "receiver")) }),
     );
-    break;
-  case "caller":
-    mountCaller(root, (onEvent) =>
+  } else {
+    mountCaller(root, displayName, (onEvent) =>
       connectCaller({ ...deps, connect: () => new WebSocket(roomUrl(page, "caller")) }, onEvent),
     );
-    break;
-  default: {
-    const heading = document.createElement("h1");
-    heading.textContent = "easyCall";
-    root.replaceChildren(heading);
   }
 }
+
+function showMessage(root: HTMLElement, text: string, ...extra: HTMLElement[]): void {
+  root.className = "message";
+  root.replaceChildren(element("p", text), ...extra);
+}
+
+void start(root);

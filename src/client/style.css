@@ -5,7 +5,8 @@ body {
   font-family: system-ui, sans-serif;
 }
 
-.call {
+.call,
+.message {
   position: fixed;
   inset: 0;
   display: grid;
@@ -54,4 +55,8 @@ body {
 .call button:disabled {
   background: #555;
   color: #aaa;
+}
+
+.message a {
+  color: #9ccc65;
 }
