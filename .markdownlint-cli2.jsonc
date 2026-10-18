@@ -1,0 +1,7 @@
+{
+  "config": {
+    "extends": "markdownlint/style/prettier",
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["node_modules"],
+}
