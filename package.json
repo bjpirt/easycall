@@ -7,18 +7,21 @@
     "node": ">=24"
   },
   "scripts": {
-    "typecheck": "wrangler types --check && tsc --noEmit",
+    "typecheck": "wrangler types --check && tsc --noEmit -p tsconfig.worker.json && tsc --noEmit -p tsconfig.e2e.json",
     "lint": "eslint . && markdownlint-cli2",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run test:e2e",
     "types": "wrangler types",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.4.4",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "markdownlint-cli2": "^0.23.3",
