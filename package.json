@@ -17,7 +17,8 @@
     "dev": "vite dev",
     "test:e2e": "playwright test",
     "build": "vite build",
-    "preview": "npm run build && vite preview"
+    "preview": "npm run build && vite preview",
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.64.0",

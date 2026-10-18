@@ -141,7 +141,13 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 - [x] 11. Ready-window timeout: no call within the window (restarts after each call) → receiver back to idle, unavailable (DO alarm)
 - [x] 12. Call-ended message: after a clean hang-up, the **receiver** goes back to idle showing "The call has ended." with the Join call button (staff rejoin to make it available again); the caller returns to a quiet idle
 
-#### D. Groups and auth (all before going live)
+#### C2. First deploy (brought forward, agreed)
+
+Deployed **without auth** so the owner can test over the internet with their own devices. Don't set up the care-home tablet or share the URL until phase D is done: anyone with the URL can open either view. Steps keep their original numbers.
+
+- [x] 19. First deploy to workers.dev: `npm run deploy`, with setup instructions (Access setup moves to step 16)
+
+#### D. Groups and auth (all before the real tablet goes live)
 
 - [ ] 13. Group URLs: `/<group>/` routes to that group's own room; unknown group gets a 404; E2E tests each use their own group and run in parallel again
 - [ ] 14. Directory: users and roles from the env var; "who am I in this group?" API
@@ -150,9 +156,8 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 - [ ] 17. Session check: every page, API call and WebSocket requires a valid session; non-members get a 404
 - [ ] 18. Role enforcement in the room: only the receiver can go available; only callers can call
 
-#### E. Going live
+#### E. Going live (rest)
 
-- [ ] 19. First deploy to workers.dev (with Access setup instructions)
 - [ ] 20. Auto-deploy from `main` after CI passes
 - [ ] 21. Access allow-list sync from the directory on deploy
 

@@ -33,6 +33,17 @@ npm run dev
 
 Then open <http://localhost:8787>. Until sign-in is built, open `?role=receiver` in one tab and `?role=caller` in another to make a call.
 
+## Deploying
+
+The app runs on Cloudflare Workers (the free plan is enough).
+
+```sh
+npx wrangler login   # once: opens a browser to authorise your Cloudflare account
+npm run deploy       # builds and deploys; prints the app's workers.dev URL
+```
+
+The first deploy may ask you to choose a `workers.dev` subdomain.
+
 ## Development
 
 ```sh
