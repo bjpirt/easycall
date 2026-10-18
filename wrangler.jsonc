@@ -3,6 +3,11 @@
   "name": "easycall",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-10-01",
+  "assets": {
+    "binding": "ASSETS",
+    // The Worker checks the group before serving the app; built assets skip it.
+    "run_worker_first": ["/*", "!/assets/*"],
+  },
   "durable_objects": {
     "bindings": [{ "name": "ROOM", "class_name": "Room" }],
   },
@@ -11,6 +16,10 @@
     // How long the receiver waits for a call before going back to idle.
     "READY_WINDOW_MINUTES": "30",
   },
+  // Secrets (DIRECTORY, TURN_KEY_ID, TURN_KEY_API_TOKEN) are optional and typed in
+  // src/worker/env.d.ts. Listing none here stops `wrangler types` inferring them
+  // from a local .dev.vars, so generated types are the same locally and in CI.
+  "secrets": { "required": [] },
   "observability": {
     "enabled": true,
   },

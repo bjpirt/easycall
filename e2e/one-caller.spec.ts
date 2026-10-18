@@ -1,14 +1,15 @@
 import { expect, test } from "./fixtures";
 
 test("only one of two callers joining at once gets the call", async ({
+  group,
   receiver,
   caller,
   otherCaller,
 }) => {
-  await receiver.goto("/?role=receiver");
+  await receiver.goto(`/${group}/?role=receiver`);
   await receiver.getByRole("button", { name: "Join call" }).click();
   for (const page of [caller, otherCaller]) {
-    await page.goto("/?role=caller");
+    await page.goto(`/${group}/?role=caller`);
     await expect(page.getByRole("button", { name: "Join call" })).toBeEnabled();
   }
 

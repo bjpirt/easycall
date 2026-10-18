@@ -1,19 +1,20 @@
 import { expect, test } from "./fixtures";
 
 test("callers see the receiver's availability and can only join when it's free", async ({
+  group,
   receiver,
   caller,
   otherCaller,
 }) => {
   const join = (page: typeof caller) => page.getByRole("button", { name: "Join call" });
 
-  await caller.goto("/?role=caller");
-  await otherCaller.goto("/?role=caller");
+  await caller.goto(`/${group}/?role=caller`);
+  await otherCaller.goto(`/${group}/?role=caller`);
   await expect(caller.getByText("Not available right now")).toBeVisible();
   await expect(join(caller)).toBeDisabled();
 
   // The receiver joining makes them available.
-  await receiver.goto("/?role=receiver");
+  await receiver.goto(`/${group}/?role=receiver`);
   await join(receiver).click();
   await expect(caller.getByText("Ready for a call")).toBeVisible();
   await expect(join(caller)).toBeEnabled();

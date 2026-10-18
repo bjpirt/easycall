@@ -1,6 +1,8 @@
 import { test as base, type Browser, type Page } from "@playwright/test";
 
-interface Peers {
+interface Fixtures {
+  /** This test's group: one per parallel worker, so concurrent tests never share a room. */
+  group: string;
   receiver: Page;
   caller: Page;
   otherCaller: Page;
@@ -19,6 +21,14 @@ async function peer(
   await context.close();
 }
 
-export const test = base.extend<Peers>({ receiver: peer, caller: peer, otherCaller: peer });
+export const test = base.extend<Fixtures>({
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern
+  group: async ({}, use, testInfo) => {
+    await use(`e2e-${String(testInfo.parallelIndex)}`);
+  },
+  receiver: peer,
+  caller: peer,
+  otherCaller: peer,
+});
 
 export { expect } from "@playwright/test";

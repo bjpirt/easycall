@@ -27,11 +27,14 @@ Requires Node 24 (see `.nvmrc`).
 ```sh
 nvm use
 npm install
+cp .dev.vars.example .dev.vars   # local settings, including a "dev" group
 npx playwright install chromium   # browser for end-to-end tests
 npm run dev
 ```
 
-Then open <http://localhost:8787>. Until sign-in is built, open `?role=receiver` in one tab and `?role=caller` in another to make a call.
+Then open <http://localhost:8787/dev/?role=receiver> in one tab and
+<http://localhost:8787/dev/?role=caller> in another to make a call. (The `?role=` switch is temporary,
+until sign-in is built.)
 
 ## Deploying
 
@@ -43,6 +46,14 @@ npm run deploy       # builds and deploys; prints the app's workers.dev URL
 ```
 
 The first deploy may ask you to choose a `workers.dev` subdomain.
+
+Each family group has its own URL, `https://<your-worker>/<group>/`. Groups are configured in the
+`DIRECTORY` secret, which isn't stored in the repo:
+
+```sh
+npx wrangler secret put DIRECTORY
+# paste e.g. {"groups":{"smith":{"displayName":"Grandma"}}}
+```
 
 For calls to work across networks that block direct connections (e.g. mobile data), create a
 TURN key in the Cloudflare dashboard (Realtime → TURN) and give the Worker its credentials:

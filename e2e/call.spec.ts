@@ -6,8 +6,8 @@ async function expectPlaying(video: Locator): Promise<void> {
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth)).toBeGreaterThan(0);
 }
 
-async function join(page: Page, role: "receiver" | "caller"): Promise<void> {
-  await page.goto(`/?role=${role}`);
+async function join(page: Page, group: string, role: "receiver" | "caller"): Promise<void> {
+  await page.goto(`/${group}/?role=${role}`);
   await page.getByRole("button", { name: "Join call" }).click();
 }
 
@@ -19,21 +19,26 @@ async function expectConnected(receiver: Page, caller: Page): Promise<void> {
   }
 }
 
-test("caller joins and is connected to the waiting receiver", async ({ receiver, caller }) => {
-  await join(receiver, "receiver");
+test("caller joins and is connected to the waiting receiver", async ({
+  group,
+  receiver,
+  caller,
+}) => {
+  await join(receiver, group, "receiver");
   await expect(receiver.getByText("Waiting for a call…")).toBeVisible();
 
-  await join(caller, "caller");
+  await join(caller, group, "caller");
 
   await expectConnected(receiver, caller);
 });
 
 test("caller hangs up: receiver shows the call has ended, staff can rejoin", async ({
+  group,
   receiver,
   caller,
 }) => {
-  await join(receiver, "receiver");
-  await join(caller, "caller");
+  await join(receiver, group, "receiver");
+  await join(caller, group, "caller");
   await expectConnected(receiver, caller);
 
   await caller.getByRole("button", { name: "Hang up" }).click();

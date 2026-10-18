@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { roomUrl } from "./room-url";
 
 describe("roomUrl", () => {
-  it("uses wss on https pages", () => {
+  it("is the group's room, using wss on https pages", () => {
     expect(roomUrl(new URL("https://example.com/smith/"), "receiver")).toBe(
-      "wss://example.com/api/room?role=receiver",
+      "wss://example.com/smith/api/room?role=receiver",
     );
   });
 
-  it("uses ws on http pages and keeps the port", () => {
-    expect(roomUrl(new URL("http://localhost:8787/"), "caller")).toBe(
-      "ws://localhost:8787/api/room?role=caller",
+  it("uses ws on http pages, keeps the port and drops the page's query", () => {
+    expect(roomUrl(new URL("http://localhost:8787/smith/?role=caller"), "caller")).toBe(
+      "ws://localhost:8787/smith/api/room?role=caller",
     );
   });
 });
