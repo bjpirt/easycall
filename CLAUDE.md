@@ -86,6 +86,8 @@ A very simple video-calling system so family can call a family member in care wh
 - **Worker tests:** colocated `*.test.ts`, run inside workerd by `@cloudflare/vitest-plugin`; call the Worker with `exports.default.fetch()` from `cloudflare:workers`. These tests **bypass static-asset routing**, so static pages are covered by E2E tests, not Worker tests.
 - **TypeScript projects:** `tsconfig.base.json` (shared strict options); `tsconfig.worker.json` (`src/`, Workers types, no DOM); `tsconfig.e2e.json` (`e2e/`, `playwright.config.ts`, DOM + Node types). The root `tsconfig.json` just references them (for editors/ESLint). Add a client (DOM) project when browser code arrives (step 6).
 - **E2E (step 3):** Playwright 1.64, Chromium only (matches the tablet), against `wrangler dev` on port 8788 (started automatically; reused locally if already running). Tests live in `e2e/*.spec.ts`, and Vitest excludes `e2e/`. `e2e/fixtures.ts` provides `receiver` and `caller` pages, each in its own browser context with a fake camera/mic and permissions granted. One-off setup: `npx playwright install chromium`.
+- **CI (step 4):** `.github/workflows/check.yml` runs on every push and PR: `npm ci`, installs Chromium, runs `npm run check`, and uploads the Playwright report on failure. Node comes from `.nvmrc`.
+- Claude's shell also lacks Homebrew on PATH: use `export PATH="/opt/homebrew/bin:$PATH"` for `gh`.
 - **Planned:** Vite for the client build.
 
 ## Build plan
@@ -101,7 +103,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 - [x] 1. Tooling: TypeScript, ESLint, Prettier, markdownlint, Vitest, `npm run check`
 - [x] 2. Hello Worker: Worker serves a static page; Worker test
 - [x] 3. E2E harness: Playwright drives two fake-camera browsers against `wrangler dev`
-- [ ] 4. GitHub + CI: repo pushed; Actions runs `npm run check` on push
+- [~] 4. GitHub + CI: repo pushed; Actions runs `npm run check` on push
 
 #### B. Video call (before auth, a dev-only `?role=receiver` switch picks the view)
 
