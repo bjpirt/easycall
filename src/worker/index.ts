@@ -1,3 +1,5 @@
+import type { MemberRole } from "../shared/roles";
+import { roomRole } from "../shared/roles";
 import { devLogin } from "./dev-login";
 import { parseDirectory, type Directory, type Group } from "./directory";
 import { login } from "./login";
@@ -8,23 +10,20 @@ export { Room } from "./room";
 
 /**
  * Routes:
- *   /api/ice-servers    STUN/TURN servers for a call
- *   /login              sign in (guarded by Cloudflare Access)
- *   /dev-login          local sign-in (only when DEV_LOGIN=true)
- *   /<group>/           the app (same page for every role)
- *   /<group>/api/me     who you are in the group
- *   /<group>/api/room   WebSocket to the group's room
- * Everything else, including unknown groups, is a 404. Built assets
- * (/assets/*) are served by Cloudflare without running the Worker.
+ *   /login                     sign in (guarded by Cloudflare Access)
+ *   /dev-login                 local sign-in (only when DEV_LOGIN=true)
+ *   /<group>/                  the app (same page for every role)
+ *   /<group>/api/me            who you are in the group
+ *   /<group>/api/ice-servers   STUN/TURN servers for a call
+ *   /<group>/api/room          WebSocket to the group's room
+ * Group routes need a member's session: without one, the page redirects to
+ * /login and the APIs return 401; non-members get a 404. Everything else is a
+ * 404. Built assets (/assets/*) are served by Cloudflare without the Worker.
  */
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === "/api/ice-servers") {
-      // Credentials are per call, so never cache them.
-      return Response.json({ iceServers: await iceServers(env) }, { headers: noStore });
-    }
     if (url.pathname === "/login") return login(request, env);
     if (url.pathname === "/dev-login" && env.DEV_LOGIN === "true") {
       return devLogin(request, env.SESSION_SECRET);
@@ -34,43 +33,64 @@ export default {
     const directory = parseDirectory(env.DIRECTORY);
     const group = slug ? directory.group(slug) : undefined;
     if (!group) return notFound();
+    if (rest === undefined) {
+      return Response.redirect(new URL(`/${group.slug}/${url.search}`, url).toString(), 301);
+    }
+
+    const member = await authenticate(request, env, directory, group);
+    if (member.type === "not-member") return notFound();
+    if (member.type === "signed-out") {
+      if (rest !== "/")
+        return Response.json({ error: "Not signed in" }, { status: 401, headers: noStore });
+      const next = encodeURIComponent(url.pathname + url.search);
+      return Response.redirect(new URL(`/login?next=${next}`, url).toString(), 302);
+    }
 
     switch (rest) {
-      case undefined:
-        return Response.redirect(new URL(`/${group.slug}/${url.search}`, url).toString(), 301);
       case "/":
         return env.ASSETS.fetch(new URL("/", url));
       case "/api/me":
-        return me(request, env, directory, group);
-      case "/api/room":
-        return env.ROOM.getByName(group.slug).fetch(request);
+        return Response.json(
+          { email: member.email, role: member.role, displayName: group.displayName },
+          {
+            headers: { ...noStore, "Set-Cookie": await sessionCookie(member.email, member.secret) },
+          },
+        );
+      case "/api/ice-servers":
+        // Credentials are per call, so never cache them.
+        return Response.json({ iceServers: await iceServers(env) }, { headers: noStore });
+      case "/api/room": {
+        // The room trusts this role: it comes from the directory, never from the browser.
+        const target = new URL(request.url);
+        target.search = new URLSearchParams({ role: roomRole(member.role) }).toString();
+        return env.ROOM.getByName(group.slug).fetch(new Request(target, request));
+      }
       default:
         return notFound();
     }
   },
 } satisfies ExportedHandler<Env>;
 
-const noStore = { "Cache-Control": "no-store" };
+type Member =
+  | { type: "member"; email: string; role: MemberRole; secret: string }
+  | { type: "signed-out" }
+  | { type: "not-member" };
 
-/** Your role in the group: 401 if not signed in, 404 if not a member. Renews the session. */
-async function me(
+/** Who's making the request, and whether they're in the group. */
+async function authenticate(
   request: Request,
   env: Env,
   directory: Directory,
   group: Group,
-): Promise<Response> {
+): Promise<Member> {
   const secret = env.SESSION_SECRET;
   const email = await readSession(request, secret);
-  if (!email || !secret)
-    return Response.json({ error: "Not signed in" }, { status: 401, headers: noStore });
-
+  if (!email || !secret) return { type: "signed-out" };
   const role = directory.role(group.slug, email);
-  if (!role) return notFound();
-  return Response.json(
-    { email, role, displayName: group.displayName },
-    { headers: { ...noStore, "Set-Cookie": await sessionCookie(email, secret) } },
-  );
+  return role ? { type: "member", email, role, secret } : { type: "not-member" };
 }
+
+const noStore = { "Cache-Control": "no-store" };
 
 function notFound(): Response {
   return new Response("Not found", { status: 404 });

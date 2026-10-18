@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { stunOnly } from "../shared/ice";
 import { fetchIceServers } from "./ice";
 
+const page = new URL("https://example.com/smith/");
+
 const turn = { urls: ["turn:turn.cloudflare.com:3478"], username: "u", credential: "c" };
 
 describe("fetchIceServers", () => {
@@ -10,8 +12,8 @@ describe("fetchIceServers", () => {
       Promise.resolve(Response.json({ iceServers: [turn] })),
     );
 
-    expect(await fetchIceServers(fetcher)).toEqual([turn]);
-    expect(fetcher).toHaveBeenCalledWith("/api/ice-servers");
+    expect(await fetchIceServers(page, fetcher)).toEqual([turn]);
+    expect(fetcher).toHaveBeenCalledWith(new URL("https://example.com/smith/api/ice-servers"));
   });
 
   it.each([
@@ -21,6 +23,6 @@ describe("fetchIceServers", () => {
   ])("falls back to STUN only on %s", async (_, respond) => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    expect(await fetchIceServers(vi.fn<typeof fetch>(respond))).toEqual(stunOnly);
+    expect(await fetchIceServers(page, vi.fn<typeof fetch>(respond))).toEqual(stunOnly);
   });
 });

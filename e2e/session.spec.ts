@@ -32,24 +32,31 @@ test("each person sees the view for their role", async ({ group, receiver, calle
   await expect(caller.getByText("Grandma isn't available right now")).toBeVisible();
 });
 
-test("someone not signed in is asked to sign in", async ({ group, caller }) => {
+test("someone not signed in is sent to log in, and back afterwards", async ({ group, caller }) => {
   await caller.context().clearCookies();
 
-  await caller.goto(`/${group}/`);
+  const response = await caller.request.get(`/${group}/`, { maxRedirects: 0 });
 
-  await expect(caller.getByText("Please sign in to continue.")).toBeVisible();
-  await expect(caller.getByRole("link", { name: "Sign in" })).toHaveAttribute(
-    "href",
-    `/login?next=${encodeURIComponent(`/${group}/`)}`,
+  expect(response.status()).toBe(302);
+  expect(response.headers().location).toMatch(
+    new RegExp(`/login\\?next=${encodeURIComponent(`/${group}/`)}$`),
   );
 });
 
-test("someone who isn't a member is told so", async ({ group, caller }) => {
+test("someone who isn't a member gets a 404", async ({ group, caller }) => {
   await signIn(caller, "stranger@e2e.test");
 
-  await caller.goto(`/${group}/`);
+  const response = await caller.goto(`/${group}/`);
 
-  await expect(
-    caller.getByText("You're not a member of this group.", { exact: false }),
-  ).toBeVisible();
+  expect(response?.status()).toBe(404);
+});
+
+test("the APIs need a member's session", async ({ group, caller }) => {
+  for (const path of ["api/me", "api/ice-servers"]) {
+    expect((await caller.request.get(`/${group}/${path}`)).status()).toBe(200);
+  }
+  await caller.context().clearCookies();
+  for (const path of ["api/me", "api/ice-servers", "api/room"]) {
+    expect((await caller.request.get(`/${group}/${path}`)).status()).toBe(401);
+  }
 });

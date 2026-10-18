@@ -32,8 +32,9 @@ export default defineConfig({
   ],
   webServer: {
     command: `npm run build && npx vite preview --port ${String(port)} --strictPort`,
-    // Ready once a group page loads (the root is deliberately a 404).
-    url: `${baseURL}/e2e-0/`,
+    // Ready once the Worker answers: a 401 (no session) counts as up. Pages redirect
+    // to /login, and the root is deliberately a 404.
+    url: `${baseURL}/e2e-0/api/me`,
     reuseExistingServer: !process.env.CI,
     env: {
       // A 6-second ready window, so the timeout test doesn't take 30 minutes.
