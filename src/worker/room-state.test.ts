@@ -77,9 +77,18 @@ describe("join", () => {
   });
 
   it.each([
-    ["no receiver", room({ callers: ["a"] })],
-    ["already in a call", room({ receiver: "r", callers: ["a", "b"], active: "b" })],
-  ])("is ignored with %s", (_, before) => {
+    ["there's no receiver", room({ callers: ["a"] })],
+    ["someone else is in the call", room({ receiver: "r", callers: ["a", "b"], active: "b" })],
+  ])("is refused when %s", (_, before) => {
+    expect(receive(before, alice, { type: "join" })).toEqual({
+      state: before,
+      effects: [{ type: "send", to: "a", message: { type: "refused" } }],
+    });
+  });
+
+  it("is ignored from the caller already in the call", () => {
+    const before = room({ receiver: "r", callers: ["a"], active: "a" });
+
     expect(receive(before, alice, { type: "join" })).toEqual({ state: before, effects: [] });
   });
 
@@ -140,6 +149,7 @@ it("ignores room-only messages sent by clients", () => {
 
   expect(receive(before, alice, { type: "status", status: "available" }).effects).toEqual([]);
   expect(receive(before, alice, { type: "joined" }).effects).toEqual([]);
+  expect(receive(before, alice, { type: "refused" }).effects).toEqual([]);
 });
 
 describe("disconnect", () => {

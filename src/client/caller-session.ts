@@ -37,6 +37,7 @@ export function connectCaller(
   const socket = deps.connect();
   let open = false;
   let call: Call | undefined;
+  let status: Status = "unavailable";
   /** Set while the camera is starting, so a hang-up can cancel the join. */
   let pending: { cancelled: boolean } | undefined;
 
@@ -54,10 +55,18 @@ export function connectCaller(
   onMessage(socket, (message) => {
     switch (message.type) {
       case "status":
-        onEvent({ type: "status", status: message.status });
+        status = message.status;
+        onEvent({ type: "status", status });
         return;
       case "joined":
         call?.peer.call().catch(console.error);
+        return;
+      case "refused":
+        endCall(
+          status === "in-call"
+            ? "Someone else is in a call right now."
+            : "Not available right now.",
+        );
         return;
       case "offer":
       case "answer":

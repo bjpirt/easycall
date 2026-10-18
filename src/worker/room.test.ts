@@ -112,13 +112,31 @@ describe("room", () => {
     await other.expectNotToReceive("answer");
   });
 
-  it("ignores a join while the receiver is busy", async () => {
+  it("refuses a join while someone else is in the call", async () => {
     await inCall();
     const other = await join("caller");
 
     other.send({ type: "join" });
 
-    await other.expectNotToReceive("joined");
+    await other.expectToReceive({ type: "refused" });
+    expect(other.messages).not.toContainEqual({ type: "joined" });
+  });
+
+  it("lets only one of two simultaneous joins through", async () => {
+    await join("receiver");
+    const alice = await join("caller");
+    const bob = await join("caller");
+    await bob.expectToReceive(status("available"));
+
+    alice.send({ type: "join" });
+    bob.send({ type: "join" });
+
+    await vi.waitFor(() => {
+      const outcomes = [alice, bob].map(
+        (c) => c.messages.find((m) => m.type === "joined" || m.type === "refused")?.type,
+      );
+      expect(outcomes.sort()).toEqual(["joined", "refused"]);
+    });
   });
 
   it("a hang-up ends the call, tells the receiver and frees the room", async () => {

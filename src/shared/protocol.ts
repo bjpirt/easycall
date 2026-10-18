@@ -26,6 +26,8 @@ export type Message =
   | { type: "join" }
   /** Room → caller: you're in the call; send your offer. */
   | { type: "joined" }
+  /** Room → caller: you can't join (someone else is in the call, or no receiver). */
+  | { type: "refused" }
   /** Room → callers: the receiver's availability. */
   | { type: "status"; status: Status };
 
@@ -51,6 +53,7 @@ export function parseMessage(raw: unknown): Message | undefined {
     case "hangup":
     case "join":
     case "joined":
+    case "refused":
       return { type: value.type };
     case "status":
       return isStatus(value.status) ? { type: "status", status: value.status } : undefined;

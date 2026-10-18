@@ -10,6 +10,7 @@ describe("parseMessage", () => {
     { type: "hangup" },
     { type: "join" },
     { type: "joined" },
+    { type: "refused" },
     { type: "status", status: "unavailable" },
     { type: "status", status: "available" },
     { type: "status", status: "in-call" },

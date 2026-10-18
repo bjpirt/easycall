@@ -71,6 +71,21 @@ describe("caller session", () => {
     expect(peer.call).toHaveBeenCalled();
   });
 
+  it.each([
+    ["in-call", "Someone else is in a call right now."],
+    ["unavailable", "Not available right now."],
+  ] as const)("if refused while %s, ends the call explaining why", async (status, reason) => {
+    const peer = await join();
+    socket.receive({ type: "status", status });
+
+    socket.receive({ type: "refused" });
+
+    expect(peer.call).not.toHaveBeenCalled();
+    expect(peer.close).toHaveBeenCalled();
+    expect(camera.stopped()).toBe(true);
+    expect(events.at(-1)).toEqual({ type: "call-ended", reason });
+  });
+
   it("passes signals to the peer and reports the receiver's video", async () => {
     const peer = await join();
     const remote = new MediaStream();

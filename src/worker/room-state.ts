@@ -46,8 +46,10 @@ export function receive(state: RoomState, from: Connection, message: Message): T
 
   switch (message.type) {
     case "join":
-      if (from.role !== "caller" || state.receiver === null || state.active !== null) {
-        return unchanged(state);
+      if (from.role !== "caller" || isActive) return unchanged(state);
+      if (state.receiver === null || state.active !== null) {
+        // Only one caller at a time.
+        return { state, effects: [send(from.id, { type: "refused" })] };
       }
       return withStatus(state, { ...state, active: from.id }, [send(from.id, { type: "joined" })]);
 
@@ -66,7 +68,7 @@ export function receive(state: RoomState, from: Connection, message: Message): T
     }
 
     default:
-      return unchanged(state); // `joined` and `status` only come from the room
+      return unchanged(state); // `joined`, `refused` and `status` only come from the room
   }
 }
 
