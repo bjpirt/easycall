@@ -66,6 +66,16 @@ npm run deploy
 
 Without them, calls fall back to direct (STUN-only) connections.
 
+Sign-in uses Cloudflare Access (email one-time PIN) on the `/login` path only. Create a
+self-hosted Access application for `<your-worker>/login`, allow the members' emails, then:
+
+```sh
+npx wrangler secret put SESSION_SECRET       # a long random string, e.g. openssl rand -base64 32
+npx wrangler secret put ACCESS_TEAM_DOMAIN   # e.g. myteam.cloudflareaccess.com
+npx wrangler secret put ACCESS_AUD           # the Access application's Audience (AUD) tag
+npm run deploy
+```
+
 ## Development
 
 ```sh

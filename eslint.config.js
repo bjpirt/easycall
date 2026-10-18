@@ -21,6 +21,13 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
+    rules: {
+      // `interface A extends B {}` is how declaration merging adds to a type (see src/worker/env.d.ts).
+      "@typescript-eslint/no-empty-object-type": [
+        "error",
+        { allowInterfaces: "with-single-extends" },
+      ],
+    },
   },
   { files: ["**/*.js"], extends: [tseslint.configs.disableTypeChecked] },
   prettier,

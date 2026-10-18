@@ -1,5 +1,6 @@
 import { devLogin } from "./dev-login";
 import { parseDirectory, type Directory, type Group } from "./directory";
+import { login } from "./login";
 import { readSession, sessionCookie } from "./session";
 import { iceServers } from "./turn";
 
@@ -8,6 +9,7 @@ export { Room } from "./room";
 /**
  * Routes:
  *   /api/ice-servers    STUN/TURN servers for a call
+ *   /login              sign in (guarded by Cloudflare Access)
  *   /dev-login          local sign-in (only when DEV_LOGIN=true)
  *   /<group>/           the app (same page for every role)
  *   /<group>/api/me     who you are in the group
@@ -23,6 +25,7 @@ export default {
       // Credentials are per call, so never cache them.
       return Response.json({ iceServers: await iceServers(env) }, { headers: noStore });
     }
+    if (url.pathname === "/login") return login(request, env);
     if (url.pathname === "/dev-login" && env.DEV_LOGIN === "true") {
       return devLogin(request, env.SESSION_SECRET);
     }

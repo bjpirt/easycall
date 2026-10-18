@@ -1,3 +1,4 @@
+import { safePath } from "./safe-path";
 import { sessionCookie } from "./session";
 
 /**
@@ -17,11 +18,6 @@ export async function devLogin(request: Request, secret: string | undefined): Pr
     status: 302,
     headers: { Location: next, "Set-Cookie": await sessionCookie(email, secret) },
   });
-}
-
-/** Only same-site paths, so `next` can't send anyone to another site. */
-export function safePath(next: string | null): string {
-  return next?.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : "/";
 }
 
 function form(next: string): Response {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { devLogin, safePath } from "./dev-login";
+import { devLogin } from "./dev-login";
+import { safePath } from "./safe-path";
 
 const login = (query: string, secret: string | undefined) =>
   devLogin(new Request(`http://localhost/dev-login${query}`), secret);
