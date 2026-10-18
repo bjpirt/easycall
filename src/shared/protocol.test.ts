@@ -8,6 +8,11 @@ describe("parseMessage", () => {
     { type: "candidate", candidate: { candidate: "candidate:1", sdpMid: "0", sdpMLineIndex: 0 } },
     { type: "candidate", candidate: { candidate: "", sdpMid: null, sdpMLineIndex: null } },
     { type: "hangup" },
+    { type: "join" },
+    { type: "joined" },
+    { type: "status", status: "unavailable" },
+    { type: "status", status: "available" },
+    { type: "status", status: "in-call" },
   ];
 
   it.each(valid)("accepts $type", (message) => {
@@ -28,6 +33,7 @@ describe("parseMessage", () => {
     ["unknown type", JSON.stringify({ type: "hello" })],
     ["offer without sdp", JSON.stringify({ type: "offer" })],
     ["bad candidate", JSON.stringify({ type: "candidate", candidate: { candidate: 1 } })],
+    ["unknown status", JSON.stringify({ type: "status", status: "asleep" })],
   ])("rejects %s", (_, raw) => {
     expect(parseMessage(raw)).toBeUndefined();
   });

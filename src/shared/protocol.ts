@@ -11,11 +11,23 @@ export type Signal =
   | { type: "answer"; sdp: string }
   | { type: "candidate"; candidate: IceCandidate };
 
-/**
- * Everything sent over the room socket, relayed between caller and receiver.
- * `hangup` is a deliberate end to the call, as opposed to a lost connection.
- */
-export type Message = Signal | { type: "hangup" };
+export const statuses = ["unavailable", "available", "in-call"] as const;
+
+/** The receiver's availability, as callers see it. */
+export type Status = (typeof statuses)[number];
+
+/** Everything sent over the room socket. */
+export type Message =
+  /** Relayed between the receiver and the caller in the call. */
+  | Signal
+  /** A deliberate end to the call, as opposed to a lost connection. */
+  | { type: "hangup" }
+  /** Caller → room: start a call with the receiver. */
+  | { type: "join" }
+  /** Room → caller: you're in the call; send your offer. */
+  | { type: "joined" }
+  /** Room → callers: the receiver's availability. */
+  | { type: "status"; status: Status };
 
 /** Parses a raw WebSocket message, returning `undefined` if it isn't valid. */
 export function parseMessage(raw: unknown): Message | undefined {
@@ -37,10 +49,18 @@ export function parseMessage(raw: unknown): Message | undefined {
         ? { type: "candidate", candidate: value.candidate }
         : undefined;
     case "hangup":
-      return { type: "hangup" };
+    case "join":
+    case "joined":
+      return { type: value.type };
+    case "status":
+      return isStatus(value.status) ? { type: "status", status: value.status } : undefined;
     default:
       return undefined;
   }
+}
+
+function isStatus(value: unknown): value is Status {
+  return statuses.includes(value as Status);
 }
 
 function isIceCandidate(value: unknown): value is IceCandidate {

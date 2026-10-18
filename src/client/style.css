@@ -50,3 +50,8 @@ body {
   transform: translateX(-50%);
   background: #c62828;
 }
+
+.call button:disabled {
+  background: #555;
+  color: #aaa;
+}

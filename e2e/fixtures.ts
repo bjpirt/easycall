@@ -3,6 +3,7 @@ import { test as base, type Browser, type Page } from "@playwright/test";
 interface Peers {
   receiver: Page;
   caller: Page;
+  otherCaller: Page;
 }
 
 /** A page in its own browser context (like a separate device) with camera and mic allowed. */
@@ -18,6 +19,6 @@ async function peer(
   await context.close();
 }
 
-export const test = base.extend<Peers>({ receiver: peer, caller: peer });
+export const test = base.extend<Peers>({ receiver: peer, caller: peer, otherCaller: peer });
 
 export { expect } from "@playwright/test";

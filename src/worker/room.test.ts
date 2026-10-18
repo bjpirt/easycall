@@ -1,93 +1,159 @@
-import { exports } from "cloudflare:workers";
-import { afterEach, describe, expect, it } from "vitest";
+import { env } from "cloudflare:workers";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { parseMessage, type Message } from "../shared/protocol";
 
+/** A test WebSocket client that records every valid message it receives. */
+class Client {
+  readonly messages: Message[] = [];
+
+  constructor(readonly ws: WebSocket) {
+    ws.addEventListener("message", (event) => {
+      const message = parseMessage(event.data);
+      if (message) this.messages.push(message);
+    });
+  }
+
+  send(message: Message | string): void {
+    this.ws.send(typeof message === "string" ? message : JSON.stringify(message));
+  }
+
+  async expectToReceive(message: Message): Promise<void> {
+    await vi.waitFor(() => {
+      expect(this.messages).toContainEqual(message);
+    });
+  }
+
+  async expectNotToReceive(type: Message["type"]): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(this.messages.map((m) => m.type)).not.toContain(type);
+  }
+}
+
+let room: DurableObjectStub;
 const open: WebSocket[] = [];
+
+beforeEach(() => {
+  room = env.ROOM.getByName(crypto.randomUUID()); // a fresh room per test
+});
 
 afterEach(() => {
   for (const ws of open.splice(0)) ws.close();
 });
 
-async function connect(role: string): Promise<WebSocket> {
-  const response = await exports.default.fetch(`http://example.com/api/room?role=${role}`, {
-    headers: { Upgrade: "websocket" },
-  });
-  const ws = response.webSocket;
-  if (!ws) throw new Error(`No WebSocket (status ${String(response.status)})`);
-  ws.accept();
-  open.push(ws);
-  return ws;
+function upgrade(role: string): Promise<Response> {
+  return room.fetch(`http://room/?role=${role}`, { headers: { Upgrade: "websocket" } });
 }
 
-/** Resolves with the next message, or `undefined` if none arrives within `ms`. */
-function nextMessage(ws: WebSocket, ms = 200): Promise<unknown> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      resolve(undefined);
-    }, ms);
-    ws.addEventListener(
-      "message",
-      (event) => {
-        clearTimeout(timer);
-        resolve(event.data);
-      },
-      { once: true },
-    );
-  });
+async function join(role: "receiver" | "caller"): Promise<Client> {
+  const { webSocket } = await upgrade(role);
+  if (!webSocket) throw new Error("No WebSocket");
+  webSocket.accept();
+  open.push(webSocket);
+  return new Client(webSocket);
 }
 
-describe("room relay", () => {
-  it("relays receiver messages to the caller", async () => {
-    const receiver = await connect("receiver");
-    const caller = await connect("caller");
+const status = (s: string): Message => ({ type: "status", status: s }) as Message;
+const offer: Message = { type: "offer", sdp: "OFFER" };
+const answer: Message = { type: "answer", sdp: "ANSWER" };
 
-    const received = nextMessage(caller);
-    receiver.send("hello caller");
+/** A receiver plus a caller who has joined the call. */
+async function inCall(): Promise<{ receiver: Client; caller: Client }> {
+  const receiver = await join("receiver");
+  const caller = await join("caller");
+  await caller.expectToReceive(status("available"));
+  caller.send({ type: "join" });
+  await caller.expectToReceive({ type: "joined" });
+  return { receiver, caller };
+}
 
-    expect(await received).toBe("hello caller");
+describe("room", () => {
+  it("tells a caller the receiver is unavailable", async () => {
+    const caller = await join("caller");
+
+    await caller.expectToReceive(status("unavailable"));
   });
 
-  it("relays caller messages to the receiver", async () => {
-    const receiver = await connect("receiver");
-    const caller = await connect("caller");
+  it("tells callers when the receiver arrives and leaves", async () => {
+    const caller = await join("caller");
+    const receiver = await join("receiver");
+    await caller.expectToReceive(status("available"));
 
-    const received = nextMessage(receiver);
-    caller.send("hello receiver");
+    receiver.ws.close();
 
-    expect(await received).toBe("hello receiver");
+    await vi.waitFor(() => {
+      expect(caller.messages.at(-1)).toEqual(status("unavailable"));
+    });
   });
 
-  it("doesn't echo messages back to the sender", async () => {
-    const receiver = await connect("receiver");
-    await connect("caller");
+  it("puts a joining caller in the call and tells everyone it's in use", async () => {
+    const watcher = await join("caller");
+    await inCall();
 
-    const echoed = nextMessage(receiver);
-    receiver.send("ping");
-
-    expect(await echoed).toBeUndefined();
+    await watcher.expectToReceive(status("in-call"));
   });
 
-  it("doesn't relay messages between callers", async () => {
-    await connect("receiver");
-    const caller = await connect("caller");
-    const otherCaller = await connect("caller");
+  it("relays signals between the receiver and the caller in the call", async () => {
+    const { receiver, caller } = await inCall();
 
-    const overheard = nextMessage(otherCaller);
-    caller.send("private");
+    caller.send(offer);
+    await receiver.expectToReceive(offer);
+    receiver.send(answer);
+    await caller.expectToReceive(answer);
+  });
 
-    expect(await overheard).toBeUndefined();
+  it("doesn't relay signals to or from callers who aren't in the call", async () => {
+    const { receiver } = await inCall();
+    const other = await join("caller");
+
+    other.send(offer);
+    receiver.send(answer);
+
+    await receiver.expectNotToReceive("offer");
+    await other.expectNotToReceive("answer");
+  });
+
+  it("ignores a join while the receiver is busy", async () => {
+    await inCall();
+    const other = await join("caller");
+
+    other.send({ type: "join" });
+
+    await other.expectNotToReceive("joined");
+  });
+
+  it("a hang-up ends the call, tells the receiver and frees the room", async () => {
+    const { receiver, caller } = await inCall();
+
+    caller.send({ type: "hangup" });
+
+    await receiver.expectToReceive({ type: "hangup" });
+    await vi.waitFor(() => {
+      expect(caller.messages.at(-1)).toEqual(status("available"));
+    });
+  });
+
+  it("ends the call if the caller's connection drops", async () => {
+    const { receiver, caller } = await inCall();
+
+    caller.ws.close();
+
+    await receiver.expectToReceive({ type: "hangup" });
+  });
+
+  it("ignores messages that aren't valid", async () => {
+    const { receiver, caller } = await inCall();
+
+    caller.send("not json");
+    caller.send(offer);
+
+    await receiver.expectToReceive(offer);
   });
 
   it("rejects an unknown role", async () => {
-    const response = await exports.default.fetch("http://example.com/api/room?role=intruder", {
-      headers: { Upgrade: "websocket" },
-    });
-
-    expect(response.status).toBe(400);
+    expect((await upgrade("intruder")).status).toBe(400);
   });
 
   it("rejects requests that aren't WebSocket upgrades", async () => {
-    const response = await exports.default.fetch("http://example.com/api/room?role=caller");
-
-    expect(response.status).toBe(426);
+    expect((await room.fetch("http://room/?role=caller")).status).toBe(426);
   });
 });

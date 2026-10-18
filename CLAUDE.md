@@ -83,13 +83,21 @@ A very simple video-calling system so family can call a family member in care wh
 - Principle: keep logic pure and testable; DO/DOM/WebRTC code are thin adapters.
 - **UI approach (agreed by default):** no framework. Plain DOM + TypeScript: each view has a `State` union and a `render(state)` that rebuilds its content with `replaceChildren`, plus small `element` / `video` helpers in `dom.ts`. Plain CSS in `style.css`. Revisit only if the UI grows enough to justify a framework.
 - **Current endpoints:** `GET /api/room?role=receiver|caller` (WebSocket upgrade) → the `Room` DO. For now there's one shared room named `dev` (per-group rooms come in step 13), and the role comes from the query string (dev only, replaced by real identity in steps 14–17).
-- **Room (step 5):** `src/worker/room.ts` uses the WebSocket Hibernation API (`ctx.acceptWebSocket` with the role as a tag). It relays messages opaquely: receiver → all callers, caller → receiver; it never echoes back or relays caller ↔ caller. Bound as `ROOM` (SQLite-backed DO, migration `v1`). `src/shared/roles.ts` defines `Role` + `isRole`.
-- **Protocol (steps 7–8):** `src/shared/protocol.ts` defines `Signal` (`offer` / `answer` / `candidate`, for the peer connection) and `Message` (everything on the room socket: `Signal` | `hangup`), plus `parseMessage` (validates untrusted JSON; unknown fields dropped). The room still relays opaquely; clients ignore anything that doesn't parse.
-- **Client call flow (steps 6–7):**
+- **Room (steps 5, 9):** `src/worker/room-state.ts` is a **pure state machine**. `RoomState` = `{ receiver, callers, active }` (connection ids), with `connect` / `receive` / `disconnect` transitions returning `{ state, effects }` (effects: `send` a message to a connection, or `close` one), plus `status(state)`. Rules:
+  - A caller connecting is told the current status. Status changes go to every caller.
+  - `join` from a caller succeeds only if the receiver is there and nobody is in the call; the room replies `joined`.
+  - Signals flow only between the receiver and the active caller; anything else is dropped.
+  - `hangup` from the active caller, or the active caller disconnecting, ends the call and sends `hangup` to the receiver. The receiver disconnecting sends `hangup` to the active caller.
+  - A new receiver replaces (closes) the old one.
+- `src/worker/room.ts` is the thin DO shell (WebSocket Hibernation API): each socket's attachment holds its `{ id, role }` and is tagged with its id for lookup. State is saved in `ctx.storage.kv`; on load, ids that are no longer live are dropped (sockets don't survive a restart). Invalid messages are ignored. Bound as `ROOM` (SQLite-backed DO, migration `v1`). Room tests address a fresh DO per test (`env.ROOM.getByName(randomUUID())`). `src/shared/roles.ts` defines `Role` + `isRole`.
+- **Protocol (steps 7–9):** `src/shared/protocol.ts` defines `Signal` (`offer` / `answer` / `candidate`, for the peer connection), `Status` (`unavailable` / `available` / `in-call`) and `Message` (everything on the room socket: `Signal` | `hangup` | `join` | `joined` | `status`), plus `parseMessage` (validates untrusted JSON; unknown fields dropped).
+- **Client (steps 6–9):**
   - `peer.ts`: `createPeer` wraps `RTCPeerConnection` (STUN `stun.cloudflare.com:3478`). The caller always offers and the receiver always answers. Incoming signals are processed strictly in order through a queue (so candidates wait for the offer), and one failed signal doesn't block later ones.
-  - `session.ts`: `sessionStarter(role, deps)` turns on the camera, connects to the room and creates the peer, emitting `connected` / `remote` / `ended` events, and returns a `Session` with `hangUp()`. The caller calls as soon as it's connected. **Clean exit (step 8):** `hangUp()` sends `hangup` (only if the socket is open), then tears down; the resulting socket close isn't treated as a lost connection. On receiving `hangup`, the receiver closes the peer, makes a fresh one and goes back to `connected` (waiting); a caller's call ends. A lost connection tears everything down (reconnect comes in step 23). Camera, socket and peer factory are injected for tests.
-  - `call-view.ts`: one view for both roles (`mountCallView(root, role, start)`): `idle` → `joining` → `waiting` ("Waiting for a call…" / "Calling…", with self-view) → `active` (remote full screen + muted self-view in the corner). Only the caller gets a Hang up button (while calling and in a call); the receiver has nothing to tap once joined. An `ended` event without a reason returns quietly to idle. Split into separate views only if they genuinely diverge.
-  - `signalling.ts`: `RoomSocket` type plus `sendMessage` / `onMessage`. `dom.ts`: `element` and `video` helpers. `test-fakes.ts`: shared fakes (socket, camera, peer).
+  - `receiver-session.ts`: `receiverStarter(deps)` turns on the camera, then connects (connecting = available). Emits `waiting` / `remote` / `ended`. Answers offers. On `hangup`, it closes the peer, makes a fresh one and waits again. `leave()` disconnects quietly (for the staff exit, step 12).
+  - `caller-session.ts`: `connectCaller(deps, onEvent)` connects **when the page loads** and reports `status`. `join()` turns on the camera, sends `join`, and offers only after `joined`. **Clean exit (step 8):** `hangUp()` sends `hangup`, stops the camera and closes the peer but keeps the socket open (still watching availability). A hang-up while the camera is starting cancels the join (explicit cancellation token). On `hangup` from the room, the call ends ("The call has ended."). On socket close: `disconnected` (reconnect comes in step 23).
+  - `receiver-view.ts` / `caller-view.ts`: separate views now that they've diverged. Receiver: `idle` → `joining` → `waiting` → `active`, with nothing to tap once joined. Caller: `idle` shows the status ("Connecting…", "Not available right now", "Ready for a call", "In a call", or lost connection) with **Join call enabled only when `available`**; then `joining` → `calling` (self-view + Hang up) → `active` (remote full screen + self-view + Hang up). Status changes don't interrupt a call.
+  - `signalling.ts`: `RoomSocket` type, `sendMessage` / `onMessage`, `socketPeer`, `stopCamera`. `dom.ts`: `element` and `video` helpers. `test-fakes.ts`: shared fakes (socket, camera, peer).
+  - Known gap until step 10: if the room ignores a `join` (race with another caller), the caller stays on "Calling…".
   - `main.ts` picks the role with the dev-only `?role=receiver|caller` switch (removed in step 15).
 
 ## Tooling
@@ -127,8 +135,8 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 
 #### C. Call rules
 
-- [~] 9. Availability status: caller sees available / unavailable / in call; Join call enabled only while the receiver is waiting
-- [ ] 10. One caller only: a second caller is refused and sees "in a call"
+- [x] 9. Availability status: caller sees available / unavailable / in call; Join call enabled only while the receiver is waiting
+- [~] 10. One caller only: a second caller is refused and sees "in a call"
 - [ ] 11. Ready-window timeout: no call within the window (restarts after each call) → receiver back to idle, unavailable (DO alarm)
 - [ ] 12. Hidden staff exit: 5 s corner long-press → receiver back to idle
 
