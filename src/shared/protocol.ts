@@ -5,14 +5,20 @@ export interface IceCandidate {
   sdpMLineIndex: number | null;
 }
 
-/** WebRTC signalling messages, relayed between caller and receiver by the room. */
+/** WebRTC signalling, handled by the peer connection. */
 export type Signal =
   | { type: "offer"; sdp: string }
   | { type: "answer"; sdp: string }
   | { type: "candidate"; candidate: IceCandidate };
 
-/** Parses a raw WebSocket message, returning `undefined` if it isn't a valid signal. */
-export function parseSignal(raw: unknown): Signal | undefined {
+/**
+ * Everything sent over the room socket, relayed between caller and receiver.
+ * `hangup` is a deliberate end to the call, as opposed to a lost connection.
+ */
+export type Message = Signal | { type: "hangup" };
+
+/** Parses a raw WebSocket message, returning `undefined` if it isn't valid. */
+export function parseMessage(raw: unknown): Message | undefined {
   if (typeof raw !== "string") return undefined;
   let value: unknown;
   try {
@@ -30,6 +36,8 @@ export function parseSignal(raw: unknown): Signal | undefined {
       return isIceCandidate(value.candidate)
         ? { type: "candidate", candidate: value.candidate }
         : undefined;
+    case "hangup":
+      return { type: "hangup" };
     default:
       return undefined;
   }

@@ -81,14 +81,15 @@ A very simple video-calling system so family can call a family member in care wh
 - `src/worker/`: routing, auth, directory, TURN, push; `room.ts` is a thin DO shell over a pure `room-state.ts` state machine that returns new state + effects.
 - `src/client/`: shared lib (reconnecting socket, peer wrapper) + caller and receiver views.
 - Principle: keep logic pure and testable; DO/DOM/WebRTC code are thin adapters.
+- **UI approach (agreed by default):** no framework. Plain DOM + TypeScript: each view has a `State` union and a `render(state)` that rebuilds its content with `replaceChildren`, plus small `element` / `video` helpers in `dom.ts`. Plain CSS in `style.css`. Revisit only if the UI grows enough to justify a framework.
 - **Current endpoints:** `GET /api/room?role=receiver|caller` (WebSocket upgrade) → the `Room` DO. For now there's one shared room named `dev` (per-group rooms come in step 13), and the role comes from the query string (dev only, replaced by real identity in steps 14–17).
 - **Room (step 5):** `src/worker/room.ts` uses the WebSocket Hibernation API (`ctx.acceptWebSocket` with the role as a tag). It relays messages opaquely: receiver → all callers, caller → receiver; it never echoes back or relays caller ↔ caller. Bound as `ROOM` (SQLite-backed DO, migration `v1`). `src/shared/roles.ts` defines `Role` + `isRole`.
-- **Signalling (step 7):** `src/shared/protocol.ts` defines `Signal` (`offer` / `answer` / `candidate`) and `parseSignal` (validates untrusted JSON; unknown fields dropped). The room still relays opaquely; clients ignore anything that doesn't parse.
+- **Protocol (steps 7–8):** `src/shared/protocol.ts` defines `Signal` (`offer` / `answer` / `candidate`, for the peer connection) and `Message` (everything on the room socket: `Signal` | `hangup`), plus `parseMessage` (validates untrusted JSON; unknown fields dropped). The room still relays opaquely; clients ignore anything that doesn't parse.
 - **Client call flow (steps 6–7):**
   - `peer.ts`: `createPeer` wraps `RTCPeerConnection` (STUN `stun.cloudflare.com:3478`). The caller always offers and the receiver always answers. Incoming signals are processed strictly in order through a queue (so candidates wait for the offer), and one failed signal doesn't block later ones.
-  - `session.ts`: `sessionStarter(role, deps)` turns on the camera, connects to the room and creates the peer, emitting `connected` / `remote` / `ended` events. The caller calls as soon as it's connected. A lost connection tears everything down (reconnect comes in step 23). Camera, socket and peer factory are injected for tests.
-  - `call-view.ts`: one view for both roles (`mountCallView(root, role, start)`): `idle` → `joining` → `waiting` ("Waiting for a call…" / "Calling…", with self-view) → `active` (remote full screen + muted self-view in the corner). Split into separate views only if they genuinely diverge.
-  - `signalling.ts`: `RoomSocket` type plus `sendSignal` / `onSignal`. `dom.ts`: `element` and `video` helpers. `test-fakes.ts`: shared fakes (socket, camera, peer).
+  - `session.ts`: `sessionStarter(role, deps)` turns on the camera, connects to the room and creates the peer, emitting `connected` / `remote` / `ended` events, and returns a `Session` with `hangUp()`. The caller calls as soon as it's connected. **Clean exit (step 8):** `hangUp()` sends `hangup` (only if the socket is open), then tears down; the resulting socket close isn't treated as a lost connection. On receiving `hangup`, the receiver closes the peer, makes a fresh one and goes back to `connected` (waiting); a caller's call ends. A lost connection tears everything down (reconnect comes in step 23). Camera, socket and peer factory are injected for tests.
+  - `call-view.ts`: one view for both roles (`mountCallView(root, role, start)`): `idle` → `joining` → `waiting` ("Waiting for a call…" / "Calling…", with self-view) → `active` (remote full screen + muted self-view in the corner). Only the caller gets a Hang up button (while calling and in a call); the receiver has nothing to tap once joined. An `ended` event without a reason returns quietly to idle. Split into separate views only if they genuinely diverge.
+  - `signalling.ts`: `RoomSocket` type plus `sendMessage` / `onMessage`. `dom.ts`: `element` and `video` helpers. `test-fakes.ts`: shared fakes (socket, camera, peer).
   - `main.ts` picks the role with the dev-only `?role=receiver|caller` switch (removed in step 15).
 
 ## Tooling
@@ -98,7 +99,7 @@ A very simple video-calling system so family can call a family member in care wh
 - **Build/dev (step 6):** Vite 8 + `@cloudflare/vite-plugin` runs the Worker (in workerd) and the client together. `index.html` (root) → `src/client/main.ts`. `npm run dev` = `vite dev` on port 8787; `npm run build` = `vite build` (client + Worker into `dist/`); `npm run preview` = build + `vite preview`. `wrangler.jsonc` has no `assets.directory`: the plugin fills it in at build time. `worker-configuration.d.ts` is generated by `npm run types` and committed; `typecheck` runs `wrangler types --check` so it can't drift. Rerun `npm run types` after changing `wrangler.jsonc`.
 - **Unit tests:** colocated `*.test.ts`, as two Vitest projects. **worker** (`src/worker`, `src/shared`) runs inside workerd via `@cloudflare/vitest-plugin`; call the Worker with `exports.default.fetch()` from `cloudflare:workers`. These **bypass static-asset routing**, so pages are covered by E2E. **client** (`src/client`) runs in happy-dom; note that happy-dom's `MediaStream` lacks `getTracks()`.
 - **TypeScript projects:** `tsconfig.base.json` (shared strict options); `tsconfig.worker.json` (`src/worker`, `src/shared`, Workers types, no DOM); `tsconfig.client.json` (`src/client`, `src/shared`, DOM + `vite/client`); `tsconfig.e2e.json` (`e2e/` + root config files, DOM + Node types). The root `tsconfig.json` just references them (for editors/ESLint).
-- **E2E (step 3):** Playwright 1.64, Chromium only (matches the tablet), against the **built** app (`npm run build && vite preview`) on port 8788 (started automatically; reused locally if already running, so stop a stale one after changing code). Tests live in `e2e/*.spec.ts`. `e2e/fixtures.ts` provides `receiver` and `caller` pages, each in its own browser context with a fake camera/mic and permissions granted. One-off setup: `npx playwright install chromium`. Chromium is launched with `--allow-loopback-in-peer-connection`: without it, local WebRTC E2E fails on macOS with the firewall in stealth mode, because LAN UDP to the unsigned test browser is dropped (ICE sticks at `checking`).
+- **E2E (step 3):** Playwright 1.64, Chromium only (matches the tablet), against the **built** app (`npm run build && vite preview`) on port 8788 (started automatically; reused locally if already running, so stop a stale one after changing code). Tests live in `e2e/*.spec.ts`. **Runs with `workers: 1`** because all tests share the single `dev` room (parallel tests talked across each other); remove that in step 13 once each test can use its own group. `e2e/fixtures.ts` provides `receiver` and `caller` pages, each in its own browser context with a fake camera/mic and permissions granted. One-off setup: `npx playwright install chromium`. Chromium is launched with `--allow-loopback-in-peer-connection`: without it, local WebRTC E2E fails on macOS with the firewall in stealth mode, because LAN UDP to the unsigned test browser is dropped (ICE sticks at `checking`).
 - **CI (step 4):** `.github/workflows/check.yml` runs on every push and PR: `npm ci`, installs Chromium, runs `npm run check`, and uploads the Playwright report on failure. Node comes from `.nvmrc`.
 - Claude's shell also lacks Homebrew on PATH: use `export PATH="/opt/homebrew/bin:$PATH"` for `gh`.
 
@@ -122,18 +123,18 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 - [x] 5. Room relay: Durable Object accepts WebSockets and relays messages between receiver and caller
 - [x] 6. Receiver joins: idle screen with Join call; tapping turns on the camera (self-view in corner), connects to the room, waits
 - [x] 7. Call connects: caller's Join call starts the call; receiver auto-answers; caller video full screen, self-view in corner
-- [~] 8. Hang up: caller ends the call cleanly with an explicit `hangup` message; caller → idle, receiver → waiting
+- [x] 8. Hang up: caller ends the call cleanly with an explicit `hangup` message; caller → idle, receiver → waiting
 
 #### C. Call rules
 
-- [ ] 9. Availability status: caller sees available / unavailable / in call; Join call enabled only while the receiver is waiting
+- [~] 9. Availability status: caller sees available / unavailable / in call; Join call enabled only while the receiver is waiting
 - [ ] 10. One caller only: a second caller is refused and sees "in a call"
 - [ ] 11. Ready-window timeout: no call within the window (restarts after each call) → receiver back to idle, unavailable (DO alarm)
 - [ ] 12. Hidden staff exit: 5 s corner long-press → receiver back to idle
 
 #### D. Groups and auth (all before going live)
 
-- [ ] 13. Group URLs: `/<group>/` routes to that group's own room; unknown group gets a 404
+- [ ] 13. Group URLs: `/<group>/` routes to that group's own room; unknown group gets a 404; E2E tests each use their own group and run in parallel again
 - [ ] 14. Directory: users and roles from the env var; "who am I in this group?" API
 - [ ] 15. Role-based view: page renders receiver/caller view from role (removes dev switch)
 - [ ] 16. Login: Access-guarded `/login` verifies the Access JWT and issues the session cookie

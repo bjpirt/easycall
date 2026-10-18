@@ -42,3 +42,11 @@ body {
   width: 20vw;
   border-radius: 0.5rem;
 }
+
+.call .hang-up {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #c62828;
+}

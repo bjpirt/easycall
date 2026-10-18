@@ -1,6 +1,6 @@
 import type { Role } from "../shared/roles";
 import { element, video } from "./dom";
-import type { StartSession } from "./session";
+import type { Session, StartSession } from "./session";
 
 type State =
   | { screen: "idle"; error?: string }
@@ -17,9 +17,12 @@ const waitingText: Record<Role, string> = {
  * The call screen for either role. Idle shows a "Join call" button; joining
  * turns on the camera and connects. The receiver then waits and answers
  * automatically; the caller calls straight away. Once connected, the other
- * person fills the screen with your own camera in the corner.
+ * person fills the screen with your own camera in the corner. Only the caller
+ * can hang up; the receiver never needs to touch the screen.
  */
 export function mountCallView(root: HTMLElement, role: Role, start: StartSession): void {
+  let session: Session | undefined;
+
   const render = (state: State): void => {
     root.className = `call ${role} ${state.screen}`;
     root.replaceChildren(...view(state));
@@ -35,15 +38,23 @@ export function mountCallView(root: HTMLElement, role: Role, start: StartSession
       case "joining":
         return [element("p", "Starting…")];
       case "waiting":
-        return [element("p", waitingText[role]), video(state.camera, "self-view")];
+        return withControls([element("p", waitingText[role]), video(state.camera, "self-view")]);
       case "active":
-        return [video(state.remote, "remote-view"), video(state.camera, "self-view")];
+        return withControls([video(state.remote, "remote-view"), video(state.camera, "self-view")]);
     }
+  };
+
+  const withControls = (elements: HTMLElement[]): HTMLElement[] => {
+    if (role !== "caller") return elements;
+    const hangUp = element("button", "Hang up");
+    hangUp.className = "hang-up";
+    hangUp.addEventListener("click", () => session?.hangUp());
+    return [...elements, hangUp];
   };
 
   const join = (): void => {
     render({ screen: "joining" });
-    void start((event) => {
+    session = start((event) => {
       switch (event.type) {
         case "connected":
           render({ screen: "waiting", camera: event.camera });
@@ -52,7 +63,8 @@ export function mountCallView(root: HTMLElement, role: Role, start: StartSession
           render({ screen: "active", camera: event.camera, remote: event.remote });
           return;
         case "ended":
-          render({ screen: "idle", error: event.reason });
+          session = undefined;
+          render(event.reason ? { screen: "idle", error: event.reason } : { screen: "idle" });
           return;
       }
     });

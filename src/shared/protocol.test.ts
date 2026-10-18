@@ -1,20 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { parseSignal, type Signal } from "./protocol";
+import { parseMessage, type Message } from "./protocol";
 
-describe("parseSignal", () => {
-  const valid: Signal[] = [
+describe("parseMessage", () => {
+  const valid: Message[] = [
     { type: "offer", sdp: "v=0..." },
     { type: "answer", sdp: "v=0..." },
     { type: "candidate", candidate: { candidate: "candidate:1", sdpMid: "0", sdpMLineIndex: 0 } },
     { type: "candidate", candidate: { candidate: "", sdpMid: null, sdpMLineIndex: null } },
+    { type: "hangup" },
   ];
 
-  it.each(valid)("accepts $type", (signal) => {
-    expect(parseSignal(JSON.stringify(signal))).toEqual(signal);
+  it.each(valid)("accepts $type", (message) => {
+    expect(parseMessage(JSON.stringify(message))).toEqual(message);
   });
 
   it("drops unknown fields", () => {
-    expect(parseSignal(JSON.stringify({ type: "offer", sdp: "x", extra: 1 }))).toEqual({
+    expect(parseMessage(JSON.stringify({ type: "offer", sdp: "x", extra: 1 }))).toEqual({
       type: "offer",
       sdp: "x",
     });
@@ -28,10 +29,10 @@ describe("parseSignal", () => {
     ["offer without sdp", JSON.stringify({ type: "offer" })],
     ["bad candidate", JSON.stringify({ type: "candidate", candidate: { candidate: 1 } })],
   ])("rejects %s", (_, raw) => {
-    expect(parseSignal(raw)).toBeUndefined();
+    expect(parseMessage(raw)).toBeUndefined();
   });
 
   it("rejects binary messages", () => {
-    expect(parseSignal(new ArrayBuffer(4))).toBeUndefined();
+    expect(parseMessage(new ArrayBuffer(4))).toBeUndefined();
   });
 });
