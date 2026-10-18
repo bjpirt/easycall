@@ -16,8 +16,14 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {
-          // Synthetic camera/microphone, and no permission prompts.
-          args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+          // Synthetic camera/microphone and no permission prompts. Loopback ICE
+          // candidates let the two peers connect even when a host firewall (e.g.
+          // macOS stealth mode) drops LAN traffic to the unsigned test browser.
+          args: [
+            "--use-fake-device-for-media-stream",
+            "--use-fake-ui-for-media-stream",
+            "--allow-loopback-in-peer-connection",
+          ],
         },
       },
     },

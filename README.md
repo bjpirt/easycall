@@ -31,8 +31,7 @@ npx playwright install chromium   # browser for end-to-end tests
 npm run dev
 ```
 
-Then open <http://localhost:8787>. Until sign-in is built, add `?role=receiver` to see the
-tablet view.
+Then open <http://localhost:8787>. Until sign-in is built, open `?role=receiver` in one tab and `?role=caller` in another to make a call.
 
 ## Development
 
