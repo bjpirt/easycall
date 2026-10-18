@@ -7,6 +7,10 @@
     "bindings": [{ "name": "ROOM", "class_name": "Room" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "vars": {
+    // How long the receiver waits for a call before going back to idle.
+    "READY_WINDOW_MINUTES": "30",
+  },
   "observability": {
     "enabled": true,
   },

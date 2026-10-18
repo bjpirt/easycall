@@ -6,6 +6,7 @@ import {
   disconnect,
   emptyRoom,
   receive,
+  timeout,
   type Connection,
   type RoomState,
   type Transition,
@@ -20,7 +21,7 @@ import {
  * connections survive the object being evicted from memory.
  */
 export class Room extends DurableObject<Env> {
-  override fetch(request: Request): Response {
+  override async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     }
@@ -33,26 +34,31 @@ export class Room extends DurableObject<Env> {
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server, [connection.id]);
     server.serializeAttachment(connection);
-    this.apply(connect(this.load(), connection));
+    await this.apply(connect(this.load(), connection));
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  override webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): void {
+  override async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     const message = parseMessage(raw);
-    if (message) this.apply(receive(this.load(), connectionOf(ws), message));
+    if (message) await this.apply(receive(this.load(), connectionOf(ws), message));
   }
 
-  override webSocketClose(ws: WebSocket): void {
-    this.leave(ws);
+  override async webSocketClose(ws: WebSocket): Promise<void> {
+    await this.leave(ws);
   }
 
-  override webSocketError(ws: WebSocket): void {
-    this.leave(ws);
+  override async webSocketError(ws: WebSocket): Promise<void> {
+    await this.leave(ws);
   }
 
-  private leave(ws: WebSocket): void {
+  /** The ready-window timer ran out. */
+  override async alarm(): Promise<void> {
+    await this.apply(timeout(this.load()));
+  }
+
+  private async leave(ws: WebSocket): Promise<void> {
     const connection = connectionOf(ws);
-    this.apply(disconnect(this.load(connection.id), connection));
+    await this.apply(disconnect(this.load(connection.id), connection));
   }
 
   /**
@@ -72,18 +78,29 @@ export class Room extends DurableObject<Env> {
     };
   }
 
-  private apply({ state, effects }: Transition): void {
+  private async apply({ state, effects }: Transition): Promise<void> {
     this.ctx.storage.kv.put("state", state);
     for (const effect of effects) {
+      if (effect.type === "timer") {
+        if (effect.running) await this.ctx.storage.setAlarm(Date.now() + readyWindowMs(this.env));
+        else await this.ctx.storage.deleteAlarm();
+        continue;
+      }
       const [ws] = this.ctx.getWebSockets(effect.type === "send" ? effect.to : effect.id);
       try {
         if (effect.type === "send") ws?.send(JSON.stringify(effect.message));
-        else ws?.close(4000, "Replaced by a newer connection");
+        else ws?.close(4000, effect.reason);
       } catch {
         // The socket closed in the meantime; its close handler will tidy up.
       }
     }
   }
+}
+
+/** How long the receiver waits for a call before going idle (default 30 minutes). */
+export function readyWindowMs(env: { READY_WINDOW_MINUTES?: string }): number {
+  const minutes = Number(env.READY_WINDOW_MINUTES);
+  return (Number.isFinite(minutes) && minutes > 0 ? minutes : 30) * 60_000;
 }
 
 function connectionOf(ws: WebSocket): Connection {

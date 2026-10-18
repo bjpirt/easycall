@@ -28,6 +28,8 @@ export type Message =
   | { type: "joined" }
   /** Room → caller: you can't join (someone else is in the call, or no receiver). */
   | { type: "refused" }
+  /** Room → receiver: nobody called within the ready window, so you've been disconnected. */
+  | { type: "timeout" }
   /** Room → callers: the receiver's availability. */
   | { type: "status"; status: Status };
 
@@ -54,6 +56,7 @@ export function parseMessage(raw: unknown): Message | undefined {
     case "join":
     case "joined":
     case "refused":
+    case "timeout":
       return { type: value.type };
     case "status":
       return isStatus(value.status) ? { type: "status", status: value.status } : undefined;

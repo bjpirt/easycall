@@ -100,6 +100,17 @@ describe("receiver session", () => {
     expect(peers[1]?.handle).toHaveBeenCalledWith({ type: "offer", sdp: "NEXT" });
   });
 
+  it("goes back to idle when nobody called in time", async () => {
+    await start();
+    socket.dispatchEvent(new Event("open"));
+
+    socket.receive({ type: "timeout" });
+    socket.dispatchEvent(new Event("close")); // the room then disconnects us
+
+    expect(camera.stopped()).toBe(true);
+    expect(events.slice(1)).toEqual([{ type: "ended", reason: "No calls just now." }]);
+  });
+
   it("ends without connecting if the camera can't start", async () => {
     deps.getCamera = () => Promise.reject(new Error("denied"));
 

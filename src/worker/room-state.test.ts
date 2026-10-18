@@ -6,6 +6,7 @@ import {
   emptyRoom,
   receive,
   status,
+  timeout,
   type Connection,
   type RoomState,
 } from "./room-state";
@@ -16,6 +17,7 @@ const bob: Connection = { id: "b", role: "caller" };
 const offer: Message = { type: "offer", sdp: "OFFER" };
 
 const room = (overrides: Partial<RoomState>): RoomState => ({ ...emptyRoom, ...overrides });
+const timer = (running: boolean) => ({ type: "timer", running });
 const statusTo = (to: string, s: string) => ({
   type: "send",
   to,
@@ -45,7 +47,7 @@ describe("connect", () => {
     const { state, effects } = connect(room({ callers: ["a", "b"] }), receiver);
 
     expect(state.receiver).toBe("r");
-    expect(effects).toEqual([statusTo("a", "available"), statusTo("b", "available")]);
+    expect(effects).toEqual([statusTo("a", "available"), statusTo("b", "available"), timer(true)]);
   });
 
   it("a new receiver replaces the old one and ends its call", () => {
@@ -55,9 +57,19 @@ describe("connect", () => {
 
     expect(state).toEqual(room({ receiver: "r", callers: ["a"] }));
     expect(effects).toEqual([
-      { type: "close", id: "old" },
+      { type: "close", id: "old", reason: "Replaced by a newer connection" },
       { type: "send", to: "a", message: { type: "hangup" } },
       statusTo("a", "available"),
+      timer(true),
+    ]);
+  });
+
+  it("a replacement receiver restarts the ready window", () => {
+    const { effects } = connect(room({ receiver: "old" }), receiver);
+
+    expect(effects).toEqual([
+      { type: "close", id: "old", reason: "Replaced by a newer connection" },
+      timer(true),
     ]);
   });
 });
@@ -73,6 +85,7 @@ describe("join", () => {
       { type: "send", to: "a", message: { type: "joined" } },
       statusTo("a", "in-call"),
       statusTo("b", "in-call"),
+      timer(false),
     ]);
   });
 
@@ -110,6 +123,7 @@ describe("hangup", () => {
       { type: "send", to: "r", message: { type: "hangup" } },
       statusTo("a", "available"),
       statusTo("b", "available"),
+      timer(true),
     ]);
   });
 
@@ -170,6 +184,7 @@ describe("disconnect", () => {
     expect(effects).toEqual([
       { type: "send", to: "r", message: { type: "hangup" } },
       statusTo("b", "available"),
+      timer(true),
     ]);
   });
 
@@ -187,6 +202,12 @@ describe("disconnect", () => {
     ]);
   });
 
+  it("a waiting receiver leaving stops the ready window", () => {
+    const { effects } = disconnect(room({ receiver: "r", callers: ["a"] }), receiver);
+
+    expect(effects).toEqual([statusTo("a", "unavailable"), timer(false)]);
+  });
+
   it("a replaced receiver leaving changes nothing", () => {
     const before = room({ receiver: "r", callers: ["a"] });
 
@@ -194,5 +215,26 @@ describe("disconnect", () => {
       state: before,
       effects: [],
     });
+  });
+});
+
+describe("timeout", () => {
+  it("sends a waiting receiver away and tells callers they're unavailable", () => {
+    const { state, effects } = timeout(room({ receiver: "r", callers: ["a"] }));
+
+    expect(state).toEqual(room({ callers: ["a"] }));
+    expect(effects).toEqual([
+      { type: "send", to: "r", message: { type: "timeout" } },
+      { type: "close", id: "r", reason: "No calls within the ready window" },
+      statusTo("a", "unavailable"),
+      timer(false),
+    ]);
+  });
+
+  it.each([
+    ["during a call", room({ receiver: "r", callers: ["a"], active: "a" })],
+    ["with no receiver", room({ callers: ["a"] })],
+  ])("does nothing %s", (_, before) => {
+    expect(timeout(before)).toEqual({ state: before, effects: [] });
   });
 });

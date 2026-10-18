@@ -11,6 +11,7 @@ describe("parseMessage", () => {
     { type: "join" },
     { type: "joined" },
     { type: "refused" },
+    { type: "timeout" },
     { type: "status", status: "unavailable" },
     { type: "status", status: "available" },
     { type: "status", status: "in-call" },

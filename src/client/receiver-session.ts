@@ -78,6 +78,9 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
             peer = newPeer();
             onEvent({ type: "waiting", camera });
             return;
+          case "timeout":
+            end("No calls just now.");
+            return;
           default:
             return;
         }

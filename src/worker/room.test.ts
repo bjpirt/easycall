@@ -1,6 +1,8 @@
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseMessage, type Message } from "../shared/protocol";
+import { readyWindowMs, type Room } from "./room";
 
 /** A test WebSocket client that records every valid message it receives. */
 class Client {
@@ -29,7 +31,7 @@ class Client {
   }
 }
 
-let room: DurableObjectStub;
+let room: DurableObjectStub<Room>;
 const open: WebSocket[] = [];
 
 beforeEach(() => {
@@ -167,11 +169,65 @@ describe("room", () => {
     await receiver.expectToReceive(offer);
   });
 
+  describe("ready window", () => {
+    const alarm = () => runInDurableObject(room, (_, state) => state.storage.getAlarm());
+
+    it("starts when the receiver joins", async () => {
+      const before = Date.now();
+      await join("receiver");
+
+      expect(await alarm()).toBeGreaterThanOrEqual(before + readyWindowMs(env));
+    });
+
+    it("sends the receiver away if nobody calls, and callers see it's unavailable", async () => {
+      const caller = await join("caller");
+      const receiver = await join("receiver");
+      await caller.expectToReceive(status("available"));
+      const closed = new Promise((resolve) => {
+        receiver.ws.addEventListener("close", resolve);
+      });
+
+      expect(await runDurableObjectAlarm(room)).toBe(true);
+
+      await receiver.expectToReceive({ type: "timeout" });
+      await closed;
+      await vi.waitFor(() => {
+        expect(caller.messages.at(-1)).toEqual(status("unavailable"));
+      });
+    });
+
+    it("is paused during a call and restarts afterwards", async () => {
+      const { caller } = await inCall();
+      expect(await alarm()).toBeNull();
+
+      caller.send({ type: "hangup" });
+
+      await vi.waitFor(async () => {
+        expect(await alarm()).not.toBeNull();
+      });
+    });
+  });
+
   it("rejects an unknown role", async () => {
     expect((await upgrade("intruder")).status).toBe(400);
   });
 
   it("rejects requests that aren't WebSocket upgrades", async () => {
     expect((await room.fetch("http://room/?role=caller")).status).toBe(426);
+  });
+});
+
+describe("readyWindowMs", () => {
+  it.each([
+    ["30", 30 * 60_000],
+    ["0.5", 30_000],
+    [undefined, 30 * 60_000],
+    ["nonsense", 30 * 60_000],
+    ["0", 30 * 60_000],
+    ["-5", 30 * 60_000],
+  ])("READY_WINDOW_MINUTES=%s is %i ms", (minutes, expected) => {
+    expect(readyWindowMs(minutes === undefined ? {} : { READY_WINDOW_MINUTES: minutes })).toBe(
+      expected,
+    );
   });
 });

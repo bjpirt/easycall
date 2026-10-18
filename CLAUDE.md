@@ -11,13 +11,13 @@ A very simple video-calling system so family can call a family member in care wh
 3. The group's callers get a push notification: "{displayName} is ready for a call."
 4. The first caller to press their **Join call** is connected automatically, with no answering on the receiver's side. The caller's video goes full screen and the receiver's self-view stays in the corner (_in call, active_).
 5. When the caller hangs up, the receiver goes back to _waiting_ (still available).
-6. If nobody calls within the ready window, or staff use the hidden exit, the receiver goes back to **idle**: camera off, disconnected, **unavailable**.
+6. If nobody calls within the ready window, the receiver goes back to **idle**: camera off, disconnected, **unavailable**.
 
 ### Screen states (agreed)
 
 - **Receiver:** _idle_ (big "Join call" button) → _in call_, which is either _waiting_ (own camera in the corner, available) or _active_ (caller video full screen + own camera in the corner).
-  - Caller hangs up → _waiting_. Ready-window timeout or hidden staff exit → _idle_.
-- **Caller:** same layout: _idle_ with a "Join call" button that's **only enabled while the receiver is waiting** → _in call, active_. Callers never wait in the room. Hang up → _idle_. **After a clean hang-up (agreed, step 12a):** idle shows "The call has ended." with the Join call button.
+  - Caller hangs up → _waiting_. Ready-window timeout → _idle_.
+- **Caller:** same layout: _idle_ with a "Join call" button that's **only enabled while the receiver is waiting** → _in call, active_. Callers never wait in the room. Hang up → _idle_. **After a clean hang-up (agreed, step 12):** idle shows "The call has ended." with the Join call button.
 - A web page can't reliably close itself, so the app never "closes"; _idle_ is the resting state.
 
 ## Requirements
@@ -26,7 +26,7 @@ A very simple video-calling system so family can call a family member in care wh
 - No interaction needed on the tablet during a call. Once joined, the page has nothing to tap.
 - Staff tapping **Join call** is the "ready" signal and the consent. The camera is only on, and can only connect, while the receiver is joined.
 - **Ready-window timeout:** if nobody calls within ~20–30 min (configurable) of joining or of the last call ending, go back to _idle_.
-- **Hidden staff exit:** e.g. long-press a corner for ~5 s to go back to _idle_ early.
+- **Hidden staff exit:** deferred as a maybe (see Deferred / later). For now staff leave the app (e.g. Home) and the ready-window timeout returns it to idle.
 - Only one caller connected at a time.
 - Users and their roles managed simply; minimal custom auth code (Access does identity).
 - Everything updatable remotely; the owner can't easily visit the tablet.
@@ -73,7 +73,7 @@ A very simple video-calling system so family can call a family member in care wh
 - **Media:** peer-to-peer WebRTC with **Cloudflare Realtime TURN** as fallback. The caller always offers and the receiver always answers. Swap to Realtime SFU later only if multi-party calls are wanted. (Pricing: $0.05/GB egress after 1,000 GB/month free, shared with SFU; expected usage is well inside the free tier.)
 - **Web app** (static assets on the Worker, installable PWA). One app, with the view chosen by role:
   - **Caller view:** own camera in the corner during a call (same layout as the receiver). Shows available / not available; Join call button only enabled when the receiver is waiting. Registers for Web Push (on iPhone this requires adding to home screen first).
-  - **Receiver view:** full screen. Follows the screen states above: _idle_ → Join call → _waiting_ → auto-accepts the incoming call (gentle chime) → _active_ → back to _waiting_; timeout or staff exit → _idle_.
+  - **Receiver view:** full screen. Follows the screen states above: _idle_ → Join call → _waiting_ → auto-accepts the incoming call (gentle chime) → _active_ → back to _waiting_; timeout → _idle_.
 
 ## Code structure (proposed)
 
@@ -89,11 +89,12 @@ A very simple video-calling system so family can call a family member in care wh
   - Signals flow only between the receiver and the active caller; anything else is dropped.
   - `hangup` from the active caller, or the active caller disconnecting, ends the call and sends `hangup` to the receiver. The receiver disconnecting sends `hangup` to the active caller.
   - A new receiver replaces (closes) the old one.
+  - **Ready window (step 11):** while the receiver is waiting (present, no call), a timer runs. `finish()` emits `timer` effects (start when waiting begins, including after each call or when a receiver is replaced; stop when waiting ends), so the state machine needs no clock. The DO turns them into a DO alarm (`setAlarm(now + window)` / `deleteAlarm`). When the alarm fires, the `timeout` transition sends the receiver `timeout`, closes it, and callers see `unavailable`. `close` effects carry a reason.
 - `src/worker/room.ts` is the thin DO shell (WebSocket Hibernation API): each socket's attachment holds its `{ id, role }` and is tagged with its id for lookup. State is saved in `ctx.storage.kv`; on load, ids that are no longer live are dropped (sockets don't survive a restart). Invalid messages are ignored. Bound as `ROOM` (SQLite-backed DO, migration `v1`). Room tests address a fresh DO per test (`env.ROOM.getByName(randomUUID())`). `src/shared/roles.ts` defines `Role` + `isRole`.
-- **Protocol (steps 7–9):** `src/shared/protocol.ts` defines `Signal` (`offer` / `answer` / `candidate`, for the peer connection), `Status` (`unavailable` / `available` / `in-call`) and `Message` (everything on the room socket: `Signal` | `hangup` | `join` | `joined` | `refused` | `status`), plus `parseMessage` (validates untrusted JSON; unknown fields dropped).
+- **Protocol (steps 7–9):** `src/shared/protocol.ts` defines `Signal` (`offer` / `answer` / `candidate`, for the peer connection), `Status` (`unavailable` / `available` / `in-call`) and `Message` (everything on the room socket: `Signal` | `hangup` | `join` | `joined` | `refused` | `timeout` | `status`), plus `parseMessage` (validates untrusted JSON; unknown fields dropped).
 - **Client (steps 6–9):**
   - `peer.ts`: `createPeer` wraps `RTCPeerConnection` (STUN `stun.cloudflare.com:3478`). The caller always offers and the receiver always answers. Incoming signals are processed strictly in order through a queue (so candidates wait for the offer), and one failed signal doesn't block later ones.
-  - `receiver-session.ts`: `receiverStarter(deps)` turns on the camera, then connects (connecting = available). Emits `waiting` / `remote` / `ended`. Answers offers. On `hangup`, it closes the peer, makes a fresh one and waits again. `leave()` disconnects quietly (for the staff exit, step 12).
+  - `receiver-session.ts`: `receiverStarter(deps)` turns on the camera, then connects (connecting = available). Emits `waiting` / `remote` / `ended`. Answers offers. On `hangup`, it closes the peer, makes a fresh one and waits again. On `timeout`, it ends with "No calls just now." (back to idle). `leave()` disconnects quietly (unused for now; kept for a possible staff exit).
   - `caller-session.ts`: `connectCaller(deps, onEvent)` connects **when the page loads** and reports `status`. `join()` turns on the camera, sends `join`, and offers only after `joined`. **Clean exit (step 8):** `hangUp()` sends `hangup`, stops the camera and closes the peer but keeps the socket open (still watching availability). A hang-up while the camera is starting cancels the join (explicit cancellation token). On `hangup` from the room, the call ends ("The call has ended."). On `refused`, the call ends with "Someone else is in a call right now." (if the last status was `in-call`) or "Not available right now." On socket close: `disconnected` (reconnect comes in step 23).
   - `receiver-view.ts` / `caller-view.ts`: separate views now that they've diverged. Receiver: `idle` → `joining` → `waiting` → `active`, with nothing to tap once joined. Caller: `idle` shows the status ("Connecting…", "Not available right now", "Ready for a call", "In a call", or lost connection) with **Join call enabled only when `available`**; then `joining` → `calling` (self-view + Hang up) → `active` (remote full screen + self-view + Hang up). Status changes don't interrupt a call.
   - `signalling.ts`: `RoomSocket` type, `sendMessage` / `onMessage`, `socketPeer`, `stopCamera`. `dom.ts`: `element` and `video` helpers. `test-fakes.ts`: shared fakes (socket, camera, peer).
@@ -104,6 +105,7 @@ A very simple video-calling system so family can call a family member in care wh
 - **In place (step 1):** TypeScript 6 (strict + `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), ESLint 10 + typescript-eslint `strictTypeChecked` + `stylisticTypeChecked` (`eslint-config-prettier` turns off style rules), Prettier (print width 100), markdownlint-cli2 (prettier-compatible style), Vitest 5.
 - Scripts: `typecheck`, `lint` (ESLint + markdownlint), `format` / `format:check`, `test` (Vitest), `test:e2e` (Playwright), and **`check`** (all of them, E2E included; this is the definition of done). Run `npm run format` to fix formatting.
 - **Build/dev (step 6):** Vite 8 + `@cloudflare/vite-plugin` runs the Worker (in workerd) and the client together. `index.html` (root) → `src/client/main.ts`. `npm run dev` = `vite dev` on port 8787; `npm run build` = `vite build` (client + Worker into `dist/`); `npm run preview` = build + `vite preview`. `wrangler.jsonc` has no `assets.directory`: the plugin fills it in at build time. `worker-configuration.d.ts` is generated by `npm run types` and committed; `typecheck` runs `wrangler types --check` so it can't drift. Rerun `npm run types` after changing `wrangler.jsonc`.
+- **Config (step 11):** `READY_WINDOW_MINUTES` (wrangler `vars`, default `"30"`; parsed by `readyWindowMs`, and anything invalid or ≤ 0 falls back to 30). `vite.config.ts` overrides it from the `READY_WINDOW_MINUTES` env var when set; the Playwright web server sets `0.1` (6 s) so the timeout can be tested. That build is test-only, so always rebuild before deploying, and don't reuse a preview server on 8788 that was started without it.
 - **Unit tests:** colocated `*.test.ts`, as two Vitest projects. **worker** (`src/worker`, `src/shared`) runs inside workerd via `@cloudflare/vitest-plugin`; call the Worker with `exports.default.fetch()` from `cloudflare:workers`. These **bypass static-asset routing**, so pages are covered by E2E. **client** (`src/client`) runs in happy-dom; note that happy-dom's `MediaStream` lacks `getTracks()`.
 - **TypeScript projects:** `tsconfig.base.json` (shared strict options); `tsconfig.worker.json` (`src/worker`, `src/shared`, Workers types, no DOM); `tsconfig.client.json` (`src/client`, `src/shared`, DOM + `vite/client`); `tsconfig.e2e.json` (`e2e/` + root config files, DOM + Node types). The root `tsconfig.json` just references them (for editors/ESLint).
 - **E2E (step 3):** Playwright 1.64, Chromium only (matches the tablet), against the **built** app (`npm run build && vite preview`) on port 8788 (started automatically; reused locally if already running, so stop a stale one after changing code). Tests live in `e2e/*.spec.ts`. **Runs with `workers: 1`** because all tests share the single `dev` room (parallel tests talked across each other); remove that in step 13 once each test can use its own group. `e2e/fixtures.ts` provides `receiver` and `caller` pages, each in its own browser context with a fake camera/mic and permissions granted. One-off setup: `npx playwright install chromium`. Chromium is launched with `--allow-loopback-in-peer-connection`: without it, local WebRTC E2E fails on macOS with the firewall in stealth mode, because LAN UDP to the unsigned test browser is dropped (ICE sticks at `checking`).
@@ -136,9 +138,8 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 
 - [x] 9. Availability status: caller sees available / unavailable / in call; Join call enabled only while the receiver is waiting
 - [x] 10. One caller only: a second caller is refused and sees "in a call"
-- [~] 11. Ready-window timeout: no call within the window (restarts after each call) → receiver back to idle, unavailable (DO alarm)
-- [ ] 12. Hidden staff exit: 5 s corner long-press → receiver back to idle
-- [ ] 12a. Call-ended message: after a clean hang-up, the caller's idle screen shows "The call has ended." together with the Join call button (not a blank idle screen)
+- [x] 11. Ready-window timeout: no call within the window (restarts after each call) → receiver back to idle, unavailable (DO alarm)
+- [~] 12. Call-ended message: after a clean hang-up, the caller's idle screen shows "The call has ended." together with the Join call button (not a blank idle screen)
 
 #### D. Groups and auth (all before going live)
 
@@ -184,6 +185,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 
 ## Deferred / later
 
+- **Maybe:** hidden staff exit on the receiver (e.g. 5 s corner long-press → back to idle). Not sure it's needed; revisit after the real-tablet trial.
 - Users/roles in D1 with an admin UI (start with env var).
 - Receiver UI details (the owner will revisit).
 - Optional scheduled auto-answer without staff opening the app (admin setting, off by default).

@@ -35,5 +35,7 @@ export default defineConfig({
     command: `npm run build && npx vite preview --port ${String(port)} --strictPort`,
     url: `http://localhost:${String(port)}`,
     reuseExistingServer: !process.env.CI,
+    // A 6-second ready window, so the timeout test doesn't take 30 minutes.
+    env: { READY_WINDOW_MINUTES: "0.1" },
   },
 });
