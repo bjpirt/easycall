@@ -141,14 +141,18 @@ describe("room", () => {
     });
   });
 
-  it("a hang-up ends the call, tells the receiver and frees the room", async () => {
+  it("a hang-up ends the call and sends the receiver back to idle", async () => {
     const { receiver, caller } = await inCall();
+    const closed = new Promise((resolve) => {
+      receiver.ws.addEventListener("close", resolve);
+    });
 
     caller.send({ type: "hangup" });
 
     await receiver.expectToReceive({ type: "hangup" });
+    await closed;
     await vi.waitFor(() => {
-      expect(caller.messages.at(-1)).toEqual(status("available"));
+      expect(caller.messages.at(-1)).toEqual(status("unavailable"));
     });
   });
 
@@ -196,15 +200,10 @@ describe("room", () => {
       });
     });
 
-    it("is paused during a call and restarts afterwards", async () => {
-      const { caller } = await inCall();
+    it("stops once a call starts", async () => {
+      await inCall();
+
       expect(await alarm()).toBeNull();
-
-      caller.send({ type: "hangup" });
-
-      await vi.waitFor(async () => {
-        expect(await alarm()).not.toBeNull();
-      });
     });
   });
 

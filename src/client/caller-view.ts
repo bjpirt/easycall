@@ -3,7 +3,7 @@ import type { CallerEvent, CallerSession } from "./caller-session";
 import { element, video } from "./dom";
 
 type Screen =
-  | { screen: "idle"; error?: string }
+  | { screen: "idle"; message?: string }
   | { screen: "joining" }
   | { screen: "calling"; camera: MediaStream }
   | { screen: "active"; camera: MediaStream; remote: MediaStream };
@@ -46,7 +46,7 @@ export function mountCaller(
           session.join();
         });
         const elements = [element("p", statusText[availability]), join];
-        return screen.error ? [...elements, element("p", screen.error)] : elements;
+        return screen.message ? [...elements, element("p", screen.message)] : elements;
       }
       case "joining":
         return [element("p", "Starting…")];
@@ -80,7 +80,7 @@ export function mountCaller(
         render({ screen: "active", camera: event.camera, remote: event.remote });
         return;
       case "call-ended":
-        render(event.reason ? { screen: "idle", error: event.reason } : { screen: "idle" });
+        render(event.reason ? { screen: "idle", message: event.reason } : { screen: "idle" });
         return;
     }
   });

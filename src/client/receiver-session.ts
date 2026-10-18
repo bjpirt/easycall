@@ -21,8 +21,8 @@ export type StartReceiver = (onEvent: (event: ReceiverEvent) => void) => Receive
 
 /**
  * The receiver's session: turn on the camera and join the room, which makes the
- * receiver available. Incoming calls are answered automatically, and after each
- * call it waits for the next one.
+ * receiver available. An incoming call is answered automatically. When it ends,
+ * or nobody calls in time, the session ends and the receiver goes back to idle.
  */
 export function receiverStarter(deps: ReceiverDeps): StartReceiver {
   return (onEvent) => {
@@ -50,11 +50,9 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
       }
 
       const socket = deps.connect();
-      const newPeer = () =>
-        socketPeer(deps.createPeer, socket, camera, (remote) => {
-          onEvent({ type: "remote", camera, remote });
-        });
-      let peer = newPeer();
+      const peer = socketPeer(deps.createPeer, socket, camera, (remote) => {
+        onEvent({ type: "remote", camera, remote });
+      });
 
       teardown = () => {
         peer.close();
@@ -73,10 +71,7 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
             peer.handle(message).catch(console.error);
             return;
           case "hangup":
-            // The call is over: get ready for the next caller.
-            peer.close();
-            peer = newPeer();
-            onEvent({ type: "waiting", camera });
+            end("The call has ended.");
             return;
           case "timeout":
             end("No calls just now.");

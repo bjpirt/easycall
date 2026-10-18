@@ -10,14 +10,14 @@ A very simple video-calling system so family can call a family member in care wh
 2. Staff tap **Join call**. That is the "ready" signal and the consent. The receiver's camera turns on (self-view in the corner), the tablet connects to the group's room and the receiver is marked **available** (receiver state: _in call, waiting_).
 3. The group's callers get a push notification: "{displayName} is ready for a call."
 4. The first caller to press their **Join call** is connected automatically, with no answering on the receiver's side. The caller's video goes full screen and the receiver's self-view stays in the corner (_in call, active_).
-5. When the caller hangs up, the receiver goes back to _waiting_ (still available).
+5. When the caller hangs up, the receiver goes back to **idle** (camera off, unavailable) showing "The call has ended." with the Join call button. Staff tap Join call to make the receiver available again.
 6. If nobody calls within the ready window, the receiver goes back to **idle**: camera off, disconnected, **unavailable**.
 
 ### Screen states (agreed)
 
 - **Receiver:** _idle_ (big "Join call" button) → _in call_, which is either _waiting_ (own camera in the corner, available) or _active_ (caller video full screen + own camera in the corner).
-  - Caller hangs up → _waiting_. Ready-window timeout → _idle_.
-- **Caller:** same layout: _idle_ with a "Join call" button that's **only enabled while the receiver is waiting** → _in call, active_. Callers never wait in the room. Hang up → _idle_. **After a clean hang-up (agreed, step 12):** idle shows "The call has ended." with the Join call button.
+  - Caller hangs up → _idle_ with "The call has ended." (agreed in step 12, replacing the earlier "back to waiting"). Ready-window timeout → _idle_ with "No calls just now."
+- **Caller:** same layout: _idle_ with a "Join call" button that's **only enabled while the receiver is waiting** → _in call, active_. Callers never wait in the room. Hang up → _idle_. After hanging up, the caller's idle screen is quiet (status + Join call, no message).
 - A web page can't reliably close itself, so the app never "closes"; _idle_ is the resting state.
 
 ## Requirements
@@ -32,7 +32,7 @@ A very simple video-calling system so family can call a family member in care wh
 - Everything updatable remotely; the owner can't easily visit the tablet.
 - Recovers by itself from Wi-Fi drops (care home Wi-Fi may be flaky or locked down).
 - **Clean vs unclean exit (agreed):** handle them differently.
-  - **Clean:** someone deliberately hangs up. The client sends an explicit `hangup` message, and the call ends immediately (caller → idle, receiver → waiting).
+  - **Clean:** someone deliberately hangs up. The client sends an explicit `hangup` message, and the call ends immediately (caller → quiet idle, receiver → idle with "The call has ended.").
   - **Unclean:** the connection is lost (socket closes or drops without a `hangup`, or the media connection fails). Don't end the call straight away: hold the call and the caller's slot for a short grace period while both sides try to reconnect/recover, then end it if they don't come back.
   - Rely on the explicit message, not WebSocket close codes / `wasClean`, which aren't trustworthy across networks.
 
@@ -73,7 +73,7 @@ A very simple video-calling system so family can call a family member in care wh
 - **Media:** peer-to-peer WebRTC with **Cloudflare Realtime TURN** as fallback. The caller always offers and the receiver always answers. Swap to Realtime SFU later only if multi-party calls are wanted. (Pricing: $0.05/GB egress after 1,000 GB/month free, shared with SFU; expected usage is well inside the free tier.)
 - **Web app** (static assets on the Worker, installable PWA). One app, with the view chosen by role:
   - **Caller view:** own camera in the corner during a call (same layout as the receiver). Shows available / not available; Join call button only enabled when the receiver is waiting. Registers for Web Push (on iPhone this requires adding to home screen first).
-  - **Receiver view:** full screen. Follows the screen states above: _idle_ → Join call → _waiting_ → auto-accepts the incoming call (gentle chime) → _active_ → back to _waiting_; timeout → _idle_.
+  - **Receiver view:** full screen. Follows the screen states above: _idle_ → Join call → _waiting_ → auto-accepts the incoming call (gentle chime) → _active_ → call ends → _idle_; timeout → _idle_.
 
 ## Code structure (proposed)
 
@@ -87,16 +87,16 @@ A very simple video-calling system so family can call a family member in care wh
   - A caller connecting is told the current status. Status changes go to every caller.
   - `join` from a caller succeeds only if the receiver is there and nobody is in the call; the room replies `joined`. **Otherwise it replies `refused` (step 10)**, so only one caller is ever in the call, even if two press Join at once. A repeat `join` from the active caller is ignored.
   - Signals flow only between the receiver and the active caller; anything else is dropped.
-  - `hangup` from the active caller, or the active caller disconnecting, ends the call and sends `hangup` to the receiver. The receiver disconnecting sends `hangup` to the active caller.
+  - `hangup` from the active caller, or the active caller disconnecting, ends the call (`endCall`): the receiver is sent `hangup` and **closed** (back to idle), so callers go straight to `unavailable`, with no flicker through `available`. The receiver disconnecting sends `hangup` to the active caller.
   - A new receiver replaces (closes) the old one.
   - **Ready window (step 11):** while the receiver is waiting (present, no call), a timer runs. `finish()` emits `timer` effects (start when waiting begins, including after each call or when a receiver is replaced; stop when waiting ends), so the state machine needs no clock. The DO turns them into a DO alarm (`setAlarm(now + window)` / `deleteAlarm`). When the alarm fires, the `timeout` transition sends the receiver `timeout`, closes it, and callers see `unavailable`. `close` effects carry a reason.
 - `src/worker/room.ts` is the thin DO shell (WebSocket Hibernation API): each socket's attachment holds its `{ id, role }` and is tagged with its id for lookup. State is saved in `ctx.storage.kv`; on load, ids that are no longer live are dropped (sockets don't survive a restart). Invalid messages are ignored. Bound as `ROOM` (SQLite-backed DO, migration `v1`). Room tests address a fresh DO per test (`env.ROOM.getByName(randomUUID())`). `src/shared/roles.ts` defines `Role` + `isRole`.
 - **Protocol (steps 7–9):** `src/shared/protocol.ts` defines `Signal` (`offer` / `answer` / `candidate`, for the peer connection), `Status` (`unavailable` / `available` / `in-call`) and `Message` (everything on the room socket: `Signal` | `hangup` | `join` | `joined` | `refused` | `timeout` | `status`), plus `parseMessage` (validates untrusted JSON; unknown fields dropped).
 - **Client (steps 6–9):**
   - `peer.ts`: `createPeer` wraps `RTCPeerConnection` (STUN `stun.cloudflare.com:3478`). The caller always offers and the receiver always answers. Incoming signals are processed strictly in order through a queue (so candidates wait for the offer), and one failed signal doesn't block later ones.
-  - `receiver-session.ts`: `receiverStarter(deps)` turns on the camera, then connects (connecting = available). Emits `waiting` / `remote` / `ended`. Answers offers. On `hangup`, it closes the peer, makes a fresh one and waits again. On `timeout`, it ends with "No calls just now." (back to idle). `leave()` disconnects quietly (unused for now; kept for a possible staff exit).
+  - `receiver-session.ts`: `receiverStarter(deps)` turns on the camera, then connects (connecting = available). Emits `waiting` / `remote` / `ended`. Answers offers. On `hangup`, it ends with "The call has ended." (back to idle; the room then closes the socket). On `timeout`, it ends with "No calls just now." (back to idle). `leave()` disconnects quietly (unused for now; kept for a possible staff exit).
   - `caller-session.ts`: `connectCaller(deps, onEvent)` connects **when the page loads** and reports `status`. `join()` turns on the camera, sends `join`, and offers only after `joined`. **Clean exit (step 8):** `hangUp()` sends `hangup`, stops the camera and closes the peer but keeps the socket open (still watching availability). A hang-up while the camera is starting cancels the join (explicit cancellation token). On `hangup` from the room, the call ends ("The call has ended."). On `refused`, the call ends with "Someone else is in a call right now." (if the last status was `in-call`) or "Not available right now." On socket close: `disconnected` (reconnect comes in step 23).
-  - `receiver-view.ts` / `caller-view.ts`: separate views now that they've diverged. Receiver: `idle` → `joining` → `waiting` → `active`, with nothing to tap once joined. Caller: `idle` shows the status ("Connecting…", "Not available right now", "Ready for a call", "In a call", or lost connection) with **Join call enabled only when `available`**; then `joining` → `calling` (self-view + Hang up) → `active` (remote full screen + self-view + Hang up). Status changes don't interrupt a call.
+  - `receiver-view.ts` / `caller-view.ts`: separate views now that they've diverged. Receiver: `idle` → `joining` → `waiting` → `active`, with nothing to tap once joined. Caller: `idle` shows the status ("Connecting…", "Not available right now", "Ready for a call", "In a call", or lost connection) with **Join call enabled only when `available`**; then `joining` → `calling` (self-view + Hang up) → `active` (remote full screen + self-view + Hang up). Status changes don't interrupt a call. After a clean hang-up the caller's idle screen is quiet; a `call-ended` with a reason shows it as a `message` (field renamed from `error`).
   - `signalling.ts`: `RoomSocket` type, `sendMessage` / `onMessage`, `socketPeer`, `stopCamera`. `dom.ts`: `element` and `video` helpers. `test-fakes.ts`: shared fakes (socket, camera, peer).
     - `main.ts` picks the role with the dev-only `?role=receiver|caller` switch (removed in step 15).
 
@@ -139,7 +139,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 - [x] 9. Availability status: caller sees available / unavailable / in call; Join call enabled only while the receiver is waiting
 - [x] 10. One caller only: a second caller is refused and sees "in a call"
 - [x] 11. Ready-window timeout: no call within the window (restarts after each call) → receiver back to idle, unavailable (DO alarm)
-- [~] 12. Call-ended message: after a clean hang-up, the caller's idle screen shows "The call has ended." together with the Join call button (not a blank idle screen)
+- [x] 12. Call-ended message: after a clean hang-up, the **receiver** goes back to idle showing "The call has ended." with the Join call button (staff rejoin to make it available again); the caller returns to a quiet idle
 
 #### D. Groups and auth (all before going live)
 

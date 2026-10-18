@@ -60,8 +60,8 @@ export function receive(state: RoomState, from: Connection, message: Message): T
       return finish(state, { ...state, active: from.id }, [send(from.id, { type: "joined" })]);
 
     case "hangup":
-      if (!isActive || state.receiver === null) return unchanged(state);
-      return finish(state, { ...state, active: null }, [send(state.receiver, { type: "hangup" })]);
+      if (!isActive) return unchanged(state);
+      return endCall(state, state);
 
     case "offer":
     case "answer":
@@ -81,8 +81,7 @@ export function disconnect(state: RoomState, { id, role }: Connection): Transiti
     const next = { ...state, callers: state.callers.filter((c) => c !== id) };
     if (id !== state.active) return { state: next, effects: [] };
     // Reconnect grace periods come later (step 23); for now the call ends.
-    const effects = state.receiver === null ? [] : [send(state.receiver, { type: "hangup" })];
-    return finish(state, { ...next, active: null }, effects);
+    return endCall(state, next);
   }
   if (id !== state.receiver) return unchanged(state); // an already-replaced receiver
   const effects = state.active === null ? [] : [send(state.active, { type: "hangup" })];
@@ -95,6 +94,18 @@ export function timeout(state: RoomState): Transition {
   return finish(state, { ...state, receiver: null }, [
     send(state.receiver, { type: "timeout" }),
     { type: "close", id: state.receiver, reason: "No calls within the ready window" },
+  ]);
+}
+
+/**
+ * The call is over: the receiver is told and leaves the room (back to idle, so
+ * staff choose whether to make them available again).
+ */
+function endCall(before: RoomState, state: RoomState): Transition {
+  if (state.receiver === null) return finish(before, { ...state, active: null }, []);
+  return finish(before, { ...state, receiver: null, active: null }, [
+    send(state.receiver, { type: "hangup" }),
+    { type: "close", id: state.receiver, reason: "The call has ended" },
   ]);
 }
 

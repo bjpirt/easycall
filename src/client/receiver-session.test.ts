@@ -86,18 +86,16 @@ describe("receiver session", () => {
     expect(events).toEqual([{ type: "remote", camera, remote }]);
   });
 
-  it("goes back to waiting with a fresh peer when the call ends", async () => {
+  it("goes back to idle when the call ends", async () => {
     const { peer } = await start();
     socket.dispatchEvent(new Event("open"));
-    events.length = 0;
 
     socket.receive({ type: "hangup" });
+    socket.dispatchEvent(new Event("close")); // the room then disconnects us
 
     expect(peer.close).toHaveBeenCalled();
-    expect(camera.stopped()).toBe(false);
-    expect(events).toEqual([{ type: "waiting", camera }]);
-    socket.receive({ type: "offer", sdp: "NEXT" });
-    expect(peers[1]?.handle).toHaveBeenCalledWith({ type: "offer", sdp: "NEXT" });
+    expect(camera.stopped()).toBe(true);
+    expect(events.slice(1)).toEqual([{ type: "ended", reason: "The call has ended." }]);
   });
 
   it("goes back to idle when nobody called in time", async () => {

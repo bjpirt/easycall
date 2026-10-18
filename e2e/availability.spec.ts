@@ -24,8 +24,13 @@ test("callers see the receiver's availability and can only join when it's free",
   await expect(otherCaller.getByText("In a call")).toBeVisible();
   await expect(join(otherCaller)).toBeDisabled();
 
-  // Hanging up frees the receiver again.
+  // Hanging up ends the session: the receiver goes back to idle, so it's unavailable.
   await caller.getByRole("button", { name: "Hang up" }).click();
+  await expect(otherCaller.getByText("Not available right now")).toBeVisible();
+  await expect(join(otherCaller)).toBeDisabled();
+
+  // Staff rejoining makes it available again.
+  await join(receiver).click();
   await expect(otherCaller.getByText("Ready for a call")).toBeVisible();
   await expect(join(otherCaller)).toBeEnabled();
 

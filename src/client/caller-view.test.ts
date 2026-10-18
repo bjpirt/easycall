@@ -83,14 +83,14 @@ describe("caller view", () => {
     expect(root.textContent).toContain("Calling…");
   });
 
-  it("returns to idle showing the latest status after the call", () => {
+  it("returns quietly to idle with the latest status after hanging up", () => {
     emit({ type: "calling", camera: new MediaStream() });
-    emit({ type: "status", status: "available" });
+    emit({ type: "status", status: "unavailable" });
 
     emit({ type: "call-ended" });
 
-    expect(root.textContent).toContain("Ready for a call");
-    expect(button("Join call")?.disabled).toBe(false);
+    expect(root.textContent).toBe("Not available right now" + "Join call");
+    expect(button("Join call")?.disabled).toBe(true);
   });
 
   it("shows why a call ended", () => {

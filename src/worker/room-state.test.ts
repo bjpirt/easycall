@@ -115,15 +115,15 @@ describe("join", () => {
 describe("hangup", () => {
   const inCall = room({ receiver: "r", callers: ["a", "b"], active: "a" });
 
-  it("from the active caller ends the call and tells the receiver", () => {
+  it("from the active caller ends the call and sends the receiver back to idle", () => {
     const { state, effects } = receive(inCall, alice, { type: "hangup" });
 
-    expect(state.active).toBeNull();
+    expect(state).toEqual(room({ callers: ["a", "b"] }));
     expect(effects).toEqual([
       { type: "send", to: "r", message: { type: "hangup" } },
-      statusTo("a", "available"),
-      statusTo("b", "available"),
-      timer(true),
+      { type: "close", id: "r", reason: "The call has ended" },
+      statusTo("a", "unavailable"),
+      statusTo("b", "unavailable"),
     ]);
   });
 
@@ -180,11 +180,11 @@ describe("disconnect", () => {
       alice,
     );
 
-    expect(state).toEqual(room({ receiver: "r", callers: ["b"] }));
+    expect(state).toEqual(room({ callers: ["b"] }));
     expect(effects).toEqual([
       { type: "send", to: "r", message: { type: "hangup" } },
-      statusTo("b", "available"),
-      timer(true),
+      { type: "close", id: "r", reason: "The call has ended" },
+      statusTo("b", "unavailable"),
     ]);
   });
 
