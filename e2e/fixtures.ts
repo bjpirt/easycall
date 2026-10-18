@@ -1,4 +1,6 @@
 import { test as base, type Browser, type Page } from "@playwright/test";
+import { cookieName, sessionToken } from "../src/worker/session";
+import { baseURL, e2eSessionSecret } from "./config";
 
 interface Fixtures {
   /** This test's group: one per parallel worker, so concurrent tests never share a room. */
@@ -31,4 +33,15 @@ export const test = base.extend<Fixtures>({
   otherCaller: peer,
 });
 
+/** Signs a page's browser context in as `email`, as if they'd been through the login. */
+export async function signIn(page: Page, email: string): Promise<void> {
+  const value = await sessionToken(email, e2eSessionSecret);
+  await page
+    .context()
+    .addCookies([
+      { name: cookieName, value, url: baseURL, httpOnly: true, secure: true, sameSite: "Lax" },
+    ]);
+}
+
+export { users } from "./config";
 export { expect } from "@playwright/test";

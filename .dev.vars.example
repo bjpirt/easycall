@@ -1,2 +1,5 @@
 # Copy to .dev.vars for local development (npm run dev). Never commit .dev.vars.
 DIRECTORY={"groups":{"dev":{"displayName":"Grandma","members":{"receiver@example.com":"receiver","caller@example.com":"caller","admin@example.com":"admin"}}}}
+SESSION_SECRET=local-dev-only-session-secret
+# Enables /dev-login (sign in as anyone). Local development only: never set this in production.
+DEV_LOGIN=true

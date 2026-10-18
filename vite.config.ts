@@ -1,9 +1,9 @@
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { defineConfig } from "vite";
 
-// E2E tests supply their own groups and a short ready window via env vars.
+// E2E tests supply their own groups, session secret and a short ready window via env vars.
 const vars = Object.fromEntries(
-  ["READY_WINDOW_MINUTES", "DIRECTORY"].flatMap((name) => {
+  ["READY_WINDOW_MINUTES", "DIRECTORY", "SESSION_SECRET"].flatMap((name) => {
     const value = process.env[name];
     return value ? [[name, value]] : [];
   }),
