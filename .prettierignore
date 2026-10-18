@@ -2,3 +2,4 @@ package-lock.json
 worker-configuration.d.ts
 playwright-report
 test-results
+dist

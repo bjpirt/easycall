@@ -31,7 +31,8 @@ npx playwright install chromium   # browser for end-to-end tests
 npm run dev
 ```
 
-Then open <http://localhost:8787>.
+Then open <http://localhost:8787>. Until sign-in is built, add `?role=receiver` to see the
+tablet view.
 
 ## Development
 
@@ -39,6 +40,7 @@ Then open <http://localhost:8787>.
 npm run check    # type checks, lint, formatting and tests (must pass before committing)
 npm test         # unit tests
 npm run test:e2e # end-to-end tests (starts wrangler dev automatically)
+npm run preview  # production build served locally
 npm run format   # fix formatting
 npm run types    # regenerate Worker types after changing wrangler.jsonc
 ```

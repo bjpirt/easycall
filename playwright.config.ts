@@ -23,7 +23,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npx wrangler dev --port ${String(port)}`,
+    command: `npm run build && npx vite preview --port ${String(port)} --strictPort`,
     url: `http://localhost:${String(port)}`,
     reuseExistingServer: !process.env.CI,
   },

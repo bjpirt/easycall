@@ -5,6 +5,9 @@
       "path": "./tsconfig.worker.json"
     },
     {
+      "path": "./tsconfig.client.json"
+    },
+    {
       "path": "./tsconfig.e2e.json"
     }
   ]

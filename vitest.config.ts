@@ -1,9 +1,16 @@
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
-import { configDefaults, defineConfig } from "vitest/config";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  plugins: [cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })],
   test: {
-    exclude: [...configDefaults.exclude, "e2e/**"],
+    projects: [
+      {
+        plugins: [cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })],
+        test: { name: "worker", include: ["src/worker/**/*.test.ts", "src/shared/**/*.test.ts"] },
+      },
+      {
+        test: { name: "client", environment: "happy-dom", include: ["src/client/**/*.test.ts"] },
+      },
+    ],
   },
 });
