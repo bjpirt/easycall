@@ -1,9 +1,10 @@
+import type { IceServer } from "../shared/ice";
 import type { Signal } from "../shared/protocol";
-
-export const iceServers: RTCIceServer[] = [{ urls: "stun:stun.cloudflare.com:3478" }];
 
 export interface PeerOptions {
   localStream: MediaStream;
+  /** STUN/TURN servers for this call (TURN relays media when a direct connection fails). */
+  iceServers: IceServer[];
   send: (signal: Signal) => void;
   onRemoteStream: (stream: MediaStream) => void;
 }
@@ -23,7 +24,7 @@ export type PeerFactory = (options: PeerOptions) => Peer;
  * answers, so there's no offer collision to handle.
  */
 export function createPeer(
-  { localStream, send, onRemoteStream }: PeerOptions,
+  { localStream, iceServers, send, onRemoteStream }: PeerOptions,
   connection: RTCPeerConnection = new RTCPeerConnection({ iceServers }),
 ): Peer {
   for (const track of localStream.getTracks()) connection.addTrack(track, localStream);

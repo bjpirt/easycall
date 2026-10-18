@@ -1,3 +1,4 @@
+import type { IceServer } from "../shared/ice";
 import { parseMessage, type Message } from "../shared/protocol";
 import type { Peer, PeerFactory } from "./peer";
 
@@ -21,10 +22,12 @@ export function socketPeer(
   createPeer: PeerFactory,
   socket: RoomSocket,
   camera: MediaStream,
+  iceServers: IceServer[],
   onRemoteStream: (remote: MediaStream) => void,
 ): Peer {
   return createPeer({
     localStream: camera,
+    iceServers,
     send: (signal) => {
       sendMessage(socket, signal);
     },

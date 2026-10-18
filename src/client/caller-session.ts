@@ -1,9 +1,11 @@
+import type { IceServer } from "../shared/ice";
 import type { Status } from "../shared/protocol";
 import type { Peer, PeerFactory } from "./peer";
 import { onMessage, sendMessage, socketPeer, stopCamera, type RoomSocket } from "./signalling";
 
 export interface CallerDeps {
   getCamera: () => Promise<MediaStream>;
+  getIceServers: () => Promise<IceServer[]>;
   connect: () => RoomSocket;
   createPeer: PeerFactory;
 }
@@ -91,6 +93,7 @@ export function connectCaller(
     if (call || pending || !open) return;
     const attempt = { cancelled: false };
     pending = attempt;
+    const ice = deps.getIceServers(); // in parallel with the camera
     let camera: MediaStream;
     try {
       camera = await deps.getCamera();
@@ -99,12 +102,13 @@ export function connectCaller(
       onEvent({ type: "call-ended", reason: "Couldn't start the camera." });
       return;
     }
+    const iceServers = await ice;
     pending = undefined;
     if (attempt.cancelled) {
       stopCamera(camera); // hung up while the camera was starting
       return;
     }
-    const peer = socketPeer(deps.createPeer, socket, camera, (remote) => {
+    const peer = socketPeer(deps.createPeer, socket, camera, iceServers, (remote) => {
       onEvent({ type: "remote", camera, remote });
     });
     call = { camera, peer };

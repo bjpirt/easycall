@@ -1,5 +1,6 @@
 import { connectCaller } from "./caller-session";
 import { mountCaller } from "./caller-view";
+import { fetchIceServers } from "./ice";
 import { createPeer } from "./peer";
 import { receiverStarter } from "./receiver-session";
 import { mountReceiver } from "./receiver-view";
@@ -12,6 +13,7 @@ if (!root) throw new Error("Missing #app");
 const page = new URL(location.href);
 const deps = {
   getCamera: () => navigator.mediaDevices.getUserMedia({ video: true, audio: true }),
+  getIceServers: () => fetchIceServers(),
   createPeer,
 };
 

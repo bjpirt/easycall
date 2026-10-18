@@ -82,7 +82,7 @@ A very simple video-calling system so family can call a family member in care wh
 - `src/client/`: shared lib (reconnecting socket, peer wrapper) + caller and receiver views.
 - Principle: keep logic pure and testable; DO/DOM/WebRTC code are thin adapters.
 - **UI approach (agreed by default):** no framework. Plain DOM + TypeScript: each view has a `State` union and a `render(state)` that rebuilds its content with `replaceChildren`, plus small `element` / `video` helpers in `dom.ts`. Plain CSS in `style.css`. Revisit only if the UI grows enough to justify a framework.
-- **Current endpoints:** `GET /api/room?role=receiver|caller` (WebSocket upgrade) → the `Room` DO. For now there's one shared room named `dev` (per-group rooms come in step 13), and the role comes from the query string (dev only, replaced by real identity in steps 14–17).
+- **Current endpoints:** `GET /api/ice-servers` → `{ iceServers }` (`Cache-Control: no-store`; see TURN below). `GET /api/room?role=receiver|caller` (WebSocket upgrade) → the `Room` DO. For now there's one shared room named `dev` (per-group rooms come in step 13), and the role comes from the query string (dev only, replaced by real identity in steps 14–17).
 - **Room (steps 5, 9):** `src/worker/room-state.ts` is a **pure state machine**. `RoomState` = `{ receiver, callers, active }` (connection ids), with `connect` / `receive` / `disconnect` transitions returning `{ state, effects }` (effects: `send` a message to a connection, or `close` one), plus `status(state)`. Rules:
   - A caller connecting is told the current status. Status changes go to every caller.
   - `join` from a caller succeeds only if the receiver is there and nobody is in the call; the room replies `joined`. **Otherwise it replies `refused` (step 10)**, so only one caller is ever in the call, even if two press Join at once. A repeat `join` from the active caller is ignored.
@@ -91,6 +91,7 @@ A very simple video-calling system so family can call a family member in care wh
   - A new receiver replaces (closes) the old one.
   - **Ready window (step 11):** while the receiver is waiting (present, no call), a timer runs. `finish()` emits `timer` effects (start when waiting begins, including after each call or when a receiver is replaced; stop when waiting ends), so the state machine needs no clock. The DO turns them into a DO alarm (`setAlarm(now + window)` / `deleteAlarm`). When the alarm fires, the `timeout` transition sends the receiver `timeout`, closes it, and callers see `unavailable`. `close` effects carry a reason.
 - `src/worker/room.ts` is the thin DO shell (WebSocket Hibernation API): each socket's attachment holds its `{ id, role }` and is tagged with its id for lookup. State is saved in `ctx.storage.kv`; on load, ids that are no longer live are dropped (sockets don't survive a restart). Invalid messages are ignored. Bound as `ROOM` (SQLite-backed DO, migration `v1`). Room tests address a fresh DO per test (`env.ROOM.getByName(randomUUID())`). `src/shared/roles.ts` defines `Role` + `isRole`.
+- **TURN (step 22):** `src/worker/turn.ts` `iceServers(env, fetch)` POSTs to `https://rtc.live.cloudflare.com/v1/turn/keys/{TURN_KEY_ID}/credentials/generate-ice-servers` (Bearer `TURN_KEY_API_TOKEN`, `ttl` 24 h). It falls back to `stunOnly` if the secrets are missing (local dev, tests) or the API fails. `src/shared/ice.ts` has `IceServer`, `stunOnly` and `parseIceServers` (validates, and drops port-53 URLs, which browsers block). The client (`src/client/ice.ts` `fetchIceServers`) fetches fresh servers when Join is pressed, in parallel with the camera, and passes them to `createPeer` (`PeerOptions.iceServers`). The secrets are declared optional in `src/worker/env.d.ts` (not `secrets.required`, which would make them mandatory locally). **Until auth (phase D), `/api/ice-servers` is public, so anyone with the URL could mint TURN credentials (bandwidth on our account).**
 - **Protocol (steps 7–9):** `src/shared/protocol.ts` defines `Signal` (`offer` / `answer` / `candidate`, for the peer connection), `Status` (`unavailable` / `available` / `in-call`) and `Message` (everything on the room socket: `Signal` | `hangup` | `join` | `joined` | `refused` | `timeout` | `status`), plus `parseMessage` (validates untrusted JSON; unknown fields dropped).
 - **Client (steps 6–9):**
   - `peer.ts`: `createPeer` wraps `RTCPeerConnection` (STUN `stun.cloudflare.com:3478`). The caller always offers and the receiver always answers. Incoming signals are processed strictly in order through a queue (so candidates wait for the offer), and one failed signal doesn't block later ones.
@@ -141,15 +142,16 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 - [x] 11. Ready-window timeout: no call within the window (restarts after each call) → receiver back to idle, unavailable (DO alarm)
 - [x] 12. Call-ended message: after a clean hang-up, the **receiver** goes back to idle showing "The call has ended." with the Join call button (staff rejoin to make it available again); the caller returns to a quiet idle
 
-#### C2. First deploy (brought forward, agreed)
+#### C2. First deploy and TURN (brought forward, agreed)
 
 Deployed **without auth** so the owner can test over the internet with their own devices. Don't set up the care-home tablet or share the URL until phase D is done: anyone with the URL can open either view. Steps keep their original numbers.
 
 - [x] 19. First deploy to workers.dev: `npm run deploy`, with setup instructions (Access setup moves to step 16)
+- [x] 22. TURN: Worker issues short-lived Cloudflare TURN credentials (brought forward after the first real test: iOS Safari ↔ Firefox showed self-views but no remote video, i.e. no direct path)
 
 #### D. Groups and auth (all before the real tablet goes live)
 
-- [ ] 13. Group URLs: `/<group>/` routes to that group's own room; unknown group gets a 404; E2E tests each use their own group and run in parallel again
+- [~] 13. Group URLs: `/<group>/` routes to that group's own room; unknown group gets a 404; E2E tests each use their own group and run in parallel again
 - [ ] 14. Directory: users and roles from the env var; "who am I in this group?" API
 - [ ] 15. Role-based view: page renders receiver/caller view from role (removes dev switch)
 - [ ] 16. Login: Access-guarded `/login` verifies the Access JWT and issues the session cookie
@@ -163,10 +165,9 @@ Deployed **without auth** so the owner can test over the internet with their own
 
 #### F. Reliability
 
-- [ ] 22. TURN: Worker issues short-lived Cloudflare TURN credentials
 - [ ] 23. Auto-reconnect: WebSockets reconnect with backoff; an unclean disconnect holds the call/caller slot for a grace period instead of ending it
 - [ ] 24. Call recovery: ICE restart after a network blip mid-call
-- [ ] 25. Connection status: caller sees "reconnecting…"
+- [ ] 25. Connection status: caller sees "reconnecting…"; also show "Connecting…" until media actually flows and "Couldn't connect" if the peer connection fails (today the call screen appears as soon as the remote track exists, even if no video arrives)
 
 #### G. Notifications (per group)
 
@@ -220,6 +221,11 @@ Deployed **without auth** so the owner can test over the internet with their own
 - Keep this file updated with decisions as we make them. It's the project memory.
 - **Step workflow (agreed):** build the step → `npm run check` passes → demo/summary to the owner → **the owner signs it off** → then Claude makes one git commit for that step. Never commit before sign-off. Commit straight to `main` (no branches for now).
 - **Version control (agreed):** git, with a commit per signed-off step; a **public** GitHub repo `easycall` (agreed), so never commit personal details, emails, user lists or secrets; GitHub Actions runs `npm run check` on every push. Auto-deploy from `main` added once there's a deploy target.
+
+## Cloudflare setup (done by the owner)
+
+- `npx wrangler login`, then `npm run deploy` (step 19).
+- **TURN (step 22):** dashboard → Realtime (formerly Calls) → TURN → create a TURN key; copy the **Key ID** and **API token**. Then run `npx wrangler secret put TURN_KEY_ID` and `npx wrangler secret put TURN_KEY_API_TOKEN`, and redeploy. Check with `curl https://<app>/api/ice-servers`: it should list `turn:` URLs.
 
 ## Environment notes
 

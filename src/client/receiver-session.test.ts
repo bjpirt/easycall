@@ -11,6 +11,7 @@ let socket: FakeSocket;
 let camera: FakeCamera;
 let peers: FakePeer[];
 let deps: ReceiverDeps;
+const iceServers = [{ urls: ["turn:turn.example.com:3478"], username: "u", credential: "c" }];
 let events: ReceiverEvent[];
 
 beforeEach(() => {
@@ -20,6 +21,7 @@ beforeEach(() => {
   events = [];
   deps = {
     getCamera: vi.fn(() => Promise.resolve(camera)),
+    getIceServers: () => Promise.resolve(iceServers),
     connect: vi.fn(() => socket),
     createPeer: (options) => {
       const peer = fakePeer(options);
@@ -48,6 +50,12 @@ describe("receiver session", () => {
     socket.dispatchEvent(new Event("open"));
 
     expect(events).toEqual([{ type: "waiting", camera }]);
+  });
+
+  it("sets up the peer with the call's ICE servers", async () => {
+    const { peer } = await start();
+
+    expect(peer.options.iceServers).toBe(iceServers);
   });
 
   it("never starts a call itself", async () => {

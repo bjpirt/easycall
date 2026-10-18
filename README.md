@@ -44,6 +44,17 @@ npm run deploy       # builds and deploys; prints the app's workers.dev URL
 
 The first deploy may ask you to choose a `workers.dev` subdomain.
 
+For calls to work across networks that block direct connections (e.g. mobile data), create a
+TURN key in the Cloudflare dashboard (Realtime → TURN) and give the Worker its credentials:
+
+```sh
+npx wrangler secret put TURN_KEY_ID
+npx wrangler secret put TURN_KEY_API_TOKEN
+npm run deploy
+```
+
+Without them, calls fall back to direct (STUN-only) connections.
+
 ## Development
 
 ```sh

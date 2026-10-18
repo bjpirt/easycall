@@ -1,8 +1,10 @@
+import type { IceServer } from "../shared/ice";
 import type { PeerFactory } from "./peer";
 import { onMessage, socketPeer, stopCamera, type RoomSocket } from "./signalling";
 
 export interface ReceiverDeps {
   getCamera: () => Promise<MediaStream>;
+  getIceServers: () => Promise<IceServer[]>;
   connect: () => RoomSocket;
   createPeer: PeerFactory;
 }
@@ -37,6 +39,7 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
     };
 
     const run = async (): Promise<void> => {
+      const ice = deps.getIceServers(); // in parallel with the camera
       let camera: MediaStream;
       try {
         camera = await deps.getCamera();
@@ -44,13 +47,14 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
         end("Couldn't start the camera.");
         return;
       }
+      const iceServers = await ice;
       if (ended) {
-        stopCamera(camera); // left while the camera was starting
+        stopCamera(camera); // left while we were getting ready
         return;
       }
 
       const socket = deps.connect();
-      const peer = socketPeer(deps.createPeer, socket, camera, (remote) => {
+      const peer = socketPeer(deps.createPeer, socket, camera, iceServers, (remote) => {
         onEvent({ type: "remote", camera, remote });
       });
 

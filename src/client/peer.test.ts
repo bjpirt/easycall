@@ -34,7 +34,7 @@ function setup() {
   const onRemoteStream = vi.fn();
   const camera = fakeCamera();
   const peer = createPeer(
-    { localStream: camera, send: (s) => sent.push(s), onRemoteStream },
+    { localStream: camera, iceServers: [], send: (s) => sent.push(s), onRemoteStream },
     connection as unknown as RTCPeerConnection,
   );
   return { connection, sent, onRemoteStream, camera, peer };

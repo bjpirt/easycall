@@ -1,5 +1,6 @@
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { stunOnly } from "../shared/ice";
 
 // Static files are served by Cloudflare before the Worker runs, so they aren't
 // visible here; the E2E tests cover them.
@@ -12,6 +13,13 @@ describe("worker", () => {
     expect(response.status).toBe(101);
     response.webSocket?.accept();
     response.webSocket?.close();
+  });
+
+  it("serves ICE servers, uncached (STUN only when TURN isn't configured)", async () => {
+    const response = await exports.default.fetch("http://example.com/api/ice-servers");
+
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toEqual({ iceServers: stunOnly });
   });
 
   it("returns 404 for paths that aren't static assets", async () => {
