@@ -42,7 +42,8 @@ The app runs on Cloudflare Workers (the free plan is enough).
 
 ```sh
 npx wrangler login   # once: opens a browser to authorise your Cloudflare account
-npm run deploy       # builds and deploys; prints the app's workers.dev URL
+npm run deploy       # builds and deploys; prints the app's workers.dev URL. Always deploy this way:
+                     # the tests leave a test build in dist/
 ```
 
 The first deploy may ask you to choose a `workers.dev` subdomain.

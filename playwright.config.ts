@@ -1,6 +1,10 @@
+import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
 
-import { baseURL, e2eGroup, e2eSessionSecret, port } from "./e2e/config";
+// Before importing e2e/config, which reads it.
+process.env.E2E_SESSION_SECRET ??= randomBytes(32).toString("base64url");
+
+const { baseURL, e2eGroup, e2eSessionSecret, port } = await import("./e2e/config");
 
 const groups = Array.from({ length: 16 }, (_, i) => `e2e-${String(i)}`);
 
