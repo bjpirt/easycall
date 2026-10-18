@@ -52,7 +52,7 @@ Each family group has its own URL, `https://<your-worker>/<group>/`. Groups are 
 
 ```sh
 npx wrangler secret put DIRECTORY
-# paste e.g. {"groups":{"smith":{"displayName":"Grandma"}}}
+# paste e.g. {"groups":{"smith":{"displayName":"Grandma","members":{"tablet@example.com":"receiver","you@example.com":"admin"}}}}
 ```
 
 For calls to work across networks that block direct connections (e.g. mobile data), create a

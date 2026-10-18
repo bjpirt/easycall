@@ -1,2 +1,2 @@
 # Copy to .dev.vars for local development (npm run dev). Never commit .dev.vars.
-DIRECTORY={"groups":{"dev":{"displayName":"Grandma"}}}
+DIRECTORY={"groups":{"dev":{"displayName":"Grandma","members":{"receiver@example.com":"receiver","caller@example.com":"caller","admin@example.com":"admin"}}}}

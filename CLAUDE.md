@@ -83,7 +83,7 @@ A very simple video-calling system so family can call a family member in care wh
 - Principle: keep logic pure and testable; DO/DOM/WebRTC code are thin adapters.
 - **UI approach (agreed by default):** no framework. Plain DOM + TypeScript: each view has a `State` union and a `render(state)` that rebuilds its content with `replaceChildren`, plus small `element` / `video` helpers in `dom.ts`. Plain CSS in `style.css`. Revisit only if the UI grows enough to justify a framework.
 - **Routing (step 13):** `src/worker/index.ts`. `GET /api/ice-servers` → `{ iceServers }` (`Cache-Control: no-store`; see TURN below). `/<group>/` → the app (`env.ASSETS.fetch("/")`, the same page for every role). `/<group>` → 301 to `/<group>/` (query kept). `/<group>/api/room?role=…` (WebSocket) → that group's `Room` DO (`env.ROOM.getByName(slug)`). Everything else, including `/` and unknown groups, is a 404. `wrangler.jsonc` `assets`: `binding: "ASSETS"`, `run_worker_first: ["/*", "!/assets/*"]` (the Worker checks the group first; built assets skip it). The client's room URL is relative to the page (`new URL("api/room", page)`).
-- **Directory (step 13; members and roles in step 14):** `src/worker/directory.ts` `parseDirectory(env.DIRECTORY)` → `Directory` (`group(slug)`). `DIRECTORY` is a **secret** (never committed; the repo is public): JSON like `{"groups":{"smith":{"displayName":"Grandma"}}}`. Slugs match `slugPattern` (lowercase letters, digits, inner hyphens). Invalid groups are skipped and a missing or invalid directory is empty (logged). Read only through the `Directory` interface (D1 later).
+- **Directory (steps 13–14):** `src/worker/directory.ts` `parseDirectory(env.DIRECTORY)` → `Directory` with `group(slug)` and `role(slug, email)`. `DIRECTORY` is a **secret** (never committed; the repo is public): JSON like `{"groups":{"smith":{"displayName":"Grandma","members":{"tablet@example.com":"receiver","ben@example.com":"admin"}}}}`. Emails are case-insensitive. Invalid members are skipped; a group with more than one receiver is skipped entirely. Roles (`src/shared/roles.ts`): `MemberRole` = `receiver` / `caller` / `admin`; `roomRole()` maps `admin` → `caller` in the room. Slugs match `slugPattern` (lowercase letters, digits, inner hyphens). Invalid groups are skipped and a missing or invalid directory is empty (logged). Read only through the `Directory` interface (D1 later).
 - **Room (steps 5, 9):** `src/worker/room-state.ts` is a **pure state machine**. `RoomState` = `{ receiver, callers, active }` (connection ids), with `connect` / `receive` / `disconnect` transitions returning `{ state, effects }` (effects: `send` a message to a connection, or `close` one), plus `status(state)`. Rules:
   - A caller connecting is told the current status. Status changes go to every caller.
   - `join` from a caller succeeds only if the receiver is there and nobody is in the call; the room replies `joined`. **Otherwise it replies `refused` (step 10)**, so only one caller is ever in the call, even if two press Join at once. A repeat `join` from the active caller is ignored.
@@ -153,12 +153,14 @@ Deployed **without auth** so the owner can test over the internet with their own
 
 #### D. Groups and auth (all before the real tablet goes live)
 
+Reordered (agreed) so the session cookie exists before the Access login: local dev and E2E have no Access, so E2E mints session cookies directly, and local dev uses the `DEV_LOGIN`-only `/dev-login` page. Step numbers 14–18 were reassigned in this order.
+
 - [x] 13. Group URLs: `/<group>/` routes to that group's own room; unknown group gets a 404; E2E tests each use their own group and run in parallel again
-- [ ] 14. Directory: users and roles from the env var; "who am I in this group?" API
-- [ ] 15. Role-based view: page renders receiver/caller view from role (removes dev switch)
-- [ ] 16. Login: Access-guarded `/login` verifies the Access JWT and issues the session cookie
-- [ ] 17. Session check: every page, API call and WebSocket requires a valid session; non-members get a 404
-- [ ] 18. Role enforcement in the room: only the receiver can go available; only callers can call
+- [x] 14. Members and roles: the directory gains each group's members (email → `receiver` / `caller` / `admin`) and a role lookup
+- [~] 15. Sessions and "who am I?": our signed session cookie, `/<group>/api/me` (your role and the group's display name, or 404), and a dev-only `/dev-login` page (only when `DEV_LOGIN=true`) for local sign-in
+- [ ] 16. Role-based view: the page renders the receiver or caller view from `/api/me` (removes the `?role=` switch)
+- [ ] 17. Access login: Access-guarded `/login` verifies the Access JWT and issues the session cookie
+- [ ] 18. Enforcement: every page, API call and WebSocket requires a valid session; the room takes the role from the directory, never the URL; non-members get a 404
 
 #### E. Going live (rest)
 
@@ -221,13 +223,13 @@ Deployed **without auth** so the owner can test over the internet with their own
 - All code linted and unit tested as we go.
 - **A feature is NEVER complete until all tests, type checks and linting pass.**
 - Keep this file updated with decisions as we make them. It's the project memory.
-- **Step workflow (agreed):** build the step → `npm run check` passes → demo/summary to the owner → **the owner signs it off** → then Claude makes one git commit for that step. Never commit before sign-off. Commit straight to `main` (no branches for now).
+- **Step workflow (agreed):** build the step → `npm run check` passes → demo/summary to the owner → **the owner signs it off** → then Claude makes one git commit for that step. Never commit before sign-off. (Exception, agreed: phase D steps 14–18 are committed one by one as each passes `npm run check`, and reviewed together at the end.) Commit straight to `main` (no branches for now).
 - **Version control (agreed):** git, with a commit per signed-off step; a **public** GitHub repo `easycall` (agreed), so never commit personal details, emails, user lists or secrets; GitHub Actions runs `npm run check` on every push. Auto-deploy from `main` added once there's a deploy target.
 
 ## Cloudflare setup (done by the owner)
 
 - `npx wrangler login`, then `npm run deploy` (step 19).
-- **Directory (step 13):** `npx wrangler secret put DIRECTORY`, then paste JSON like `{"groups":{"smith":{"displayName":"Grandma"}}}`. Without it every group is a 404. App URLs are `https://easycall.ben-f23.workers.dev/<group>/`.
+- **Directory (step 13):** `npx wrangler secret put DIRECTORY`, then paste JSON with groups, display names and members (format under Directory above). Without it every group is a 404. App URLs are `https://easycall.ben-f23.workers.dev/<group>/`.
 - **TURN (step 22):** dashboard → Realtime (formerly Calls) → TURN → create a TURN key; copy the **Key ID** and **API token**. Then run `npx wrangler secret put TURN_KEY_ID` and `npx wrangler secret put TURN_KEY_API_TOKEN`, and redeploy. Check with `curl https://<app>/api/ice-servers`: it should list `turn:` URLs.
 
 ## Environment notes
