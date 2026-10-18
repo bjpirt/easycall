@@ -12,7 +12,8 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "types": ["@cloudflare/vitest-plugin/types"]
   },
-  "include": ["src", "test", "*.config.ts"]
+  "include": ["src", "test", "*.config.ts", "worker-configuration.d.ts"]
 }
