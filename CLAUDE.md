@@ -31,6 +31,10 @@ A very simple video-calling system so family can call a family member in care wh
 - Users and their roles managed simply; minimal custom auth code (Access does identity).
 - Everything updatable remotely; the owner can't easily visit the tablet.
 - Recovers by itself from Wi-Fi drops (care home Wi-Fi may be flaky or locked down).
+- **Clean vs unclean exit (agreed):** handle them differently.
+  - **Clean:** someone deliberately hangs up. The client sends an explicit `hangup` message, and the call ends immediately (caller → idle, receiver → waiting).
+  - **Unclean:** the connection is lost (socket closes or drops without a `hangup`, or the media connection fails). Don't end the call straight away: hold the call and the caller's slot for a short grace period while both sides try to reconnect/recover, then end it if they don't come back.
+  - Rely on the explicit message, not WebSocket close codes / `wasClean`, which aren't trustworthy across networks.
 
 ## Groups, users and roles (agreed)
 
@@ -77,6 +81,8 @@ A very simple video-calling system so family can call a family member in care wh
 - `src/worker/`: routing, auth, directory, TURN, push; `room.ts` is a thin DO shell over a pure `room-state.ts` state machine that returns new state + effects.
 - `src/client/`: shared lib (reconnecting socket, peer wrapper) + caller and receiver views.
 - Principle: keep logic pure and testable; DO/DOM/WebRTC code are thin adapters.
+- **Current endpoints:** `GET /api/room?role=receiver|caller` (WebSocket upgrade) → the `Room` DO. For now there's one shared room named `dev` (per-group rooms come in step 13), and the role comes from the query string (dev only, replaced by real identity in steps 14–17).
+- **Room (step 5):** `src/worker/room.ts` uses the WebSocket Hibernation API (`ctx.acceptWebSocket` with the role as a tag). It relays messages opaquely: receiver → all callers, caller → receiver; it never echoes back or relays caller ↔ caller. Bound as `ROOM` (SQLite-backed DO, migration `v1`). `src/shared/roles.ts` defines `Role` + `isRole`.
 
 ## Tooling
 
@@ -103,14 +109,14 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 - [x] 1. Tooling: TypeScript, ESLint, Prettier, markdownlint, Vitest, `npm run check`
 - [x] 2. Hello Worker: Worker serves a static page; Worker test
 - [x] 3. E2E harness: Playwright drives two fake-camera browsers against `wrangler dev`
-- [~] 4. GitHub + CI: repo pushed; Actions runs `npm run check` on push
+- [x] 4. GitHub + CI: repo pushed; Actions runs `npm run check` on push
 
 #### B. Video call (before auth, a dev-only `?role=receiver` switch picks the view)
 
-- [ ] 5. Room relay: Durable Object accepts WebSockets and relays messages between receiver and caller
+- [x] 5. Room relay: Durable Object accepts WebSockets and relays messages between receiver and caller
 - [ ] 6. Receiver joins: idle screen with Join call; tapping turns on the camera (self-view in corner), connects to the room, waits
 - [ ] 7. Call connects: caller's Join call starts the call; receiver auto-answers; caller video full screen, self-view in corner
-- [ ] 8. Hang up: caller ends the call cleanly; caller → idle, receiver → waiting
+- [ ] 8. Hang up: caller ends the call cleanly with an explicit `hangup` message; caller → idle, receiver → waiting
 
 #### C. Call rules
 
@@ -137,7 +143,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` signed off and committed.
 #### F. Reliability
 
 - [ ] 22. TURN: Worker issues short-lived Cloudflare TURN credentials
-- [ ] 23. Auto-reconnect: WebSockets reconnect with backoff
+- [ ] 23. Auto-reconnect: WebSockets reconnect with backoff; an unclean disconnect holds the call/caller slot for a grace period instead of ending it
 - [ ] 24. Call recovery: ICE restart after a network blip mid-call
 - [ ] 25. Connection status: caller sees "reconnecting…"
 
