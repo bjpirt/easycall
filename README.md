@@ -179,6 +179,11 @@ After that, every push to `main` deploys once the checks pass. To redeploy witho
 commit, use **Actions → Check and deploy → Run workflow** on `main`. The app's secrets
 (`DIRECTORY` etc.) stay in Cloudflare and aren't affected by deploys.
 
+## Acceptance tests
+
+Real devices and networks are checked by hand, with step-by-step tests anyone can run: see
+[docs/manual-tests.md](docs/manual-tests.md).
+
 ## Development
 
 ```sh

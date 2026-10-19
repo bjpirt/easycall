@@ -194,7 +194,7 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 - [x] 32. Screen stays awake during the ready window and calls (Wake Lock)
 - [x] 33. Member names (agreed design): every member has a per-group `name`; the group's `displayName` goes, and the **receiver's name** is used instead ("Call Grandma", "Grandma is ready for a call"). Directory format: `groups.<key>.members.<email> = { "role": …, "name": … }`; the key stays the URL. Strict rules: names required, exactly one receiver per group. Names shown: a label over the other person's video during a call; "Ben is calling…" on the tablet while connecting; "Grandma is in a call with Ben" for other callers; "Signed in as Ben" on the caller's idle screen
 - [x] 34. Automatic updates: devices always pick up the latest deploy
-- [ ] 35. Real-tablet trial: care home Wi-Fi/device checks; handover notes
+- [~] 35. Real-tablet trial: care home Wi-Fi/device checks; handover notes. The acceptance tests are in **`docs/manual-tests.md`**: generic and runnable by anyone, a "Before you start" list, then 13 numbered tests that build on each other, each with **Do** and **Expect**. Record results in its Results table. Keep it in step with user-facing changes
 
 ### Later stages
 
