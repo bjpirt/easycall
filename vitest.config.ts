@@ -16,6 +16,19 @@ const testDirectory = JSON.stringify({
         "beta-caller@example.com": { role: "caller", name: "Bea" },
       },
     },
+    // For the room's own tests (room.test.ts), which connect to it directly.
+    room: {
+      members: {
+        "tablet@x.com": { role: "receiver", name: "Tablet" },
+        "alice@x.com": { role: "caller", name: "Alice" },
+        ...Object.fromEntries(
+          Array.from({ length: 9 }, (_, i) => [
+            `caller-${String(i + 1)}@x.com`,
+            { role: "caller", name: `Caller ${String(i + 1)}` },
+          ]),
+        ),
+      },
+    },
   },
 });
 

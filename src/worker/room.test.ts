@@ -59,18 +59,28 @@ function upgrade(query: string): Promise<Response> {
   return room.fetch(`http://room/?${query}`, { headers: { Upgrade: "websocket" } });
 }
 
+/** Callers in the test directory's "room" group (vitest.config.ts), handed out in turn per test. */
+let nextCaller = 0;
+beforeEach(() => {
+  nextCaller = 0;
+});
+
 /**
- * Connects as the receiver (tablet@) or a caller (a fresh email unless given),
- * from a page (a fresh one unless given).
+ * Connects to the "room" group as the receiver (tablet@) or a caller (the next
+ * member unless given), from a page (a fresh one unless given).
  */
 async function join(
   role: "receiver" | "caller",
   email?: string,
   page: string = crypto.randomUUID(),
 ): Promise<Client> {
-  const who = email ?? (role === "receiver" ? "tablet@x.com" : `${crypto.randomUUID()}@x.com`);
+  nextCaller += role === "caller" && !email ? 1 : 0;
+  const who =
+    email ?? (role === "receiver" ? "tablet@x.com" : `caller-${String(nextCaller)}@x.com`);
   const name = who.split("@")[0] ?? "";
-  const { webSocket } = await upgrade(`role=${role}&email=${who}&name=${name}&page=${page}`);
+  const { webSocket } = await upgrade(
+    `group=room&role=${role}&email=${who}&name=${name}&page=${page}`,
+  );
   if (!webSocket) throw new Error("No WebSocket");
   webSocket.accept();
   open.push(webSocket);
@@ -295,6 +305,64 @@ describe("room", () => {
     });
   });
 
+  describe("membership", () => {
+    /** Changes the directory the room reads, as uploading a new one would. */
+    async function removeFromGroup(email: string): Promise<void> {
+      const directory = JSON.parse(env.DIRECTORY ?? "{}") as {
+        groups: Record<string, { members: Record<string, unknown> }>;
+      };
+      delete directory.groups.room?.members[email];
+      await runInDurableObject(room, (instance) => {
+        const target = instance as unknown as { env: Env };
+        target.env = { ...target.env, DIRECTORY: JSON.stringify(directory) };
+      });
+    }
+
+    const closeCode = (client: Client) =>
+      new Promise<number>((resolve) => {
+        client.ws.addEventListener("close", (event) => {
+          resolve(event.code);
+        });
+      });
+
+    it("turns away someone who isn't in the group", async () => {
+      const stranger = await join("caller", "stranger@x.com");
+
+      expect(await closeCode(stranger)).toBe(4000);
+      expect(stranger.messages.map((m) => m.type)).not.toContain("welcome");
+    });
+
+    it("turns away a member connecting in a role that isn't theirs", async () => {
+      const impostor = await join("receiver", "alice@x.com");
+
+      expect(await closeCode(impostor)).toBe(4000);
+    });
+
+    it("cuts off someone removed mid-call, ending the call at once", async () => {
+      const { receiver, caller } = await inCall();
+      const callerClosed = closeCode(caller);
+      await removeFromGroup("alice@x.com");
+
+      caller.send(offer); // their next message: no longer theirs to send
+
+      expect(await callerClosed).toBe(4000);
+      await receiver.expectToReceive({ type: "hangup" }); // no grace period
+      await receiver.closed;
+      expect(receiver.messages).not.toContainEqual(offer);
+    });
+
+    it("disconnects a removed member on the next thing that happens in the room", async () => {
+      const watcher = await join("caller", "alice@x.com");
+      await watcher.expectToReceive(status("unavailable"));
+      const watcherClosed = closeCode(watcher);
+      await removeFromGroup("alice@x.com");
+
+      await join("caller"); // someone else connecting
+
+      expect(await watcherClosed).toBe(4000);
+    });
+  });
+
   describe("after the room restarts (e.g. a deploy drops every socket)", () => {
     /** A call in progress whose sockets are all gone, as a restarted room finds it. */
     async function restartMidCall(): Promise<void> {
@@ -366,9 +434,10 @@ describe("room", () => {
   });
 
   it.each([
-    "role=intruder&email=a@x.com&name=A",
-    "role=caller&name=A",
-    "role=caller&email=a@x.com",
+    "group=room&role=intruder&email=a@x.com&name=A",
+    "group=room&role=caller&name=A",
+    "group=room&role=caller&email=a@x.com",
+    "role=caller&email=a@x.com&name=A",
   ])("rejects %s", async (query) => {
     expect((await upgrade(query)).status).toBe(400);
   });

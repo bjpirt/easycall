@@ -114,6 +114,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       // tells apart pages signed in as the same person) comes from the browser.
       const target = new URL(request.url);
       target.search = new URLSearchParams({
+        group: group.slug,
         role: roomRole(member.role),
         email: member.email,
         name: member.name,

@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { parseMessage } from "../shared/protocol";
-import { isRole } from "../shared/roles";
+import { isRole, roomRole } from "../shared/roles";
+import { parseDirectory } from "./directory";
 import {
   connect,
   disconnect,
@@ -16,6 +17,9 @@ import {
 
 type Deadlines = Partial<Record<TimerName, number>>;
 
+/** What each socket remembers: its connection, and the group it's in. */
+type Attachment = Connection & { group: string };
+
 /**
  * One room per group: a thin shell around the pure state machine in
  * `room-state.ts`. It loads the state, applies a transition, saves the result
@@ -27,9 +31,9 @@ type Deadlines = Partial<Record<TimerName, number>>;
  */
 export class Room extends DurableObject<Env> {
   /**
-   * Only the Worker can reach a DO, so `role`, `email` and `name` come from the
-   * directory and session. `page` comes from the browser; it only ever tells
-   * apart pages signed in as the same person.
+   * Only the Worker can reach a DO, so `group`, `role`, `email` and `name` come
+   * from the URL, directory and session. `page` comes from the browser; it only
+   * ever tells apart pages signed in as the same person.
    */
   override async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") {
@@ -39,14 +43,16 @@ export class Room extends DurableObject<Env> {
     const role = params.get("role");
     const email = params.get("email");
     const name = params.get("name");
-    if (!isRole(role) || !email || !name) {
-      return new Response("Unknown role, email or name", { status: 400 });
+    const group = params.get("group");
+    if (!isRole(role) || !email || !name || !group) {
+      return new Response("Unknown group, role, email or name", { status: 400 });
     }
 
     const id = crypto.randomUUID();
     const page = params.get("page") ?? "";
-    const connection: Connection = {
+    const connection: Attachment = {
       id,
+      group,
       role,
       email,
       name,
@@ -55,13 +61,17 @@ export class Room extends DurableObject<Env> {
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server, [connection.id]);
     server.serializeAttachment(connection);
-    await this.apply(connect(await this.load(), connection));
+    const removed = await this.removeFormerMembers();
+    if (!removed.has(id)) await this.apply(connect(await this.load(), connection));
     return new Response(null, { status: 101, webSocket: client });
   }
 
   override async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     const message = parseMessage(raw);
-    if (message) await this.apply(receive(await this.load(), connectionOf(ws), message));
+    if (!message) return;
+    const removed = await this.removeFormerMembers();
+    if (removed.has(connectionOf(ws).id)) return; // no longer theirs to send
+    await this.apply(receive(await this.load(), connectionOf(ws), message));
   }
 
   override async webSocketClose(ws: WebSocket): Promise<void> {
@@ -74,6 +84,7 @@ export class Room extends DurableObject<Env> {
 
   /** One or more timers are due. */
   override async alarm(): Promise<void> {
+    await this.removeFormerMembers();
     const due = (Object.entries(this.deadlines()) as [TimerName, number][])
       .filter(([, at]) => at <= Date.now())
       .sort(([, a], [, b]) => a - b);
@@ -82,6 +93,32 @@ export class Room extends DurableObject<Env> {
       await this.apply(expire(await this.load(), name));
     }
     await this.scheduleAlarm();
+  }
+
+  /**
+   * Members check in through the Worker only when they connect, so someone
+   * removed from the group (or given another role) could otherwise keep an open
+   * page connected. On every event, the room checks each connection against
+   * the directory: anyone who no longer belongs leaves at once, as if they'd
+   * hung up (ending any call they're in, with no grace period), and is
+   * disconnected for good. Returns the connections removed.
+   */
+  private async removeFormerMembers(): Promise<Set<string>> {
+    const directory = parseDirectory(this.env.DIRECTORY, () => undefined); // the Worker logs problems
+    const removed = new Set<string>();
+    for (const ws of this.ctx.getWebSockets()) {
+      const connection = connectionOf(ws);
+      const member = directory.member(connection.group, connection.email);
+      if (member && roomRole(member.role) === connection.role) continue;
+      removed.add(connection.id);
+      await this.apply(receive(await this.load(), connection, { type: "hangup" }));
+      try {
+        ws.close(4000, "No longer in this group");
+      } catch {
+        // Already closed.
+      }
+    }
+    return removed;
   }
 
   private async leave(ws: WebSocket): Promise<void> {
@@ -189,6 +226,6 @@ function positive(value: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-function connectionOf(ws: WebSocket): Connection {
-  return ws.deserializeAttachment() as Connection;
+function connectionOf(ws: WebSocket): Attachment {
+  return ws.deserializeAttachment() as Attachment;
 }

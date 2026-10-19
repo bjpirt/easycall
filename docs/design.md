@@ -212,6 +212,11 @@ attachment holds its `{ id, role, email, name, page }`. The state is saved in th
 after every transition. Timers are deadlines in storage, with a single Durable Object alarm set
 for the earliest one.
 
+Membership is checked when someone connects (by the Worker) and again on **every event in the
+room**: the room reads the directory itself, and anyone who's been removed from the group (or
+given another role) leaves at once, as if they'd hung up, and is disconnected for good. So
+removing someone takes effect even on a page they already have open.
+
 When it loads, the state is **checked against the live sockets**. A restart (such as a deploy)
 drops every socket without close events. So callers whose socket has gone are forgotten, and
 participants whose socket has gone are marked away and their grace timers started. They reconnect
