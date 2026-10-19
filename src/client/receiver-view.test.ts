@@ -3,15 +3,22 @@ import type { ReceiverEvent } from "./receiver-session";
 import { mountReceiver } from "./receiver-view";
 
 let root: HTMLElement;
+const awake = { take: vi.fn(), release: vi.fn() };
 let emit: ((event: ReceiverEvent) => void) | undefined;
 
 beforeEach(() => {
   root = document.createElement("main");
   emit = undefined;
-  mountReceiver(root, (onEvent) => {
-    emit = onEvent;
-    return { leave: vi.fn() };
-  });
+  awake.take.mockClear().mockReturnValue(awake.release);
+  awake.release.mockClear();
+  mountReceiver(
+    root,
+    (onEvent) => {
+      emit = onEvent;
+      return { leave: vi.fn() };
+    },
+    awake.take,
+  );
 });
 
 function join(): (event: ReceiverEvent) => void {
@@ -83,5 +90,23 @@ describe("call notices", () => {
     join()({ type: "waiting", camera: new MediaStream() });
 
     expect(notice()).toBeNull();
+  });
+});
+
+describe("keeping the screen awake", () => {
+  it("doesn't while idle", () => {
+    expect(awake.take).not.toHaveBeenCalled();
+  });
+
+  it("does while waiting and during the call, then lets it sleep once back to idle", () => {
+    const send = join();
+    send({ type: "waiting", camera: new MediaStream() });
+    send({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+    expect(awake.take).toHaveBeenCalledTimes(1);
+    expect(awake.release).not.toHaveBeenCalled();
+
+    send({ type: "ended", reason: "The call has ended." });
+
+    expect(awake.release).toHaveBeenCalledTimes(1);
   });
 });

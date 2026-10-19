@@ -2,6 +2,7 @@ import type { Status } from "../shared/protocol";
 import type { CallerEvent, CallerSession } from "./caller-session";
 import { callNotice, type MediaState } from "./call-status";
 import { element, video } from "./dom";
+import { keepAwake, type Release } from "./wake-lock";
 
 type Screen =
   | { screen: "idle"; message?: string }
@@ -32,14 +33,16 @@ function statusText(availability: Availability, name: string): string {
  * The caller (family) view. Idle shows the receiver's availability, and "Join
  * call" is only enabled while they're waiting. During a call the receiver fills
  * the screen, with your own camera in the corner, a Hang up button, and a notice
- * while it's connecting or reconnecting.
+ * while it's connecting or reconnecting. The screen is kept awake during a call.
  */
 export function mountCaller(
   root: HTMLElement,
   /** What the receiver is called, e.g. "Grandma". */
   displayName: string,
   connect: (onEvent: (event: CallerEvent) => void) => CallerSession,
+  awake: () => Release = keepAwake,
 ): void {
+  let release: Release | undefined;
   let availability: Availability = "connecting";
   let screen: Screen = { screen: "idle" };
   let media: MediaState = "connecting";
@@ -53,6 +56,15 @@ export function mountCaller(
     root.className = `call caller ${screen.screen}`;
     root.replaceChildren(...view());
     updateNotice();
+    setAwake(screen.screen === "calling" || screen.screen === "active");
+  };
+
+  const setAwake = (on: boolean): void => {
+    if (on) release ??= awake();
+    else {
+      release?.();
+      release = undefined;
+    }
   };
 
   const updateNotice = (): void => {

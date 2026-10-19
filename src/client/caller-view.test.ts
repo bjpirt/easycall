@@ -6,15 +6,23 @@ import { mountCaller } from "./caller-view";
 let root: HTMLElement;
 let emit: (event: CallerEvent) => void;
 const session = { join: vi.fn(), hangUp: vi.fn() };
+const awake = { take: vi.fn(), release: vi.fn() };
 
 beforeEach(() => {
   root = document.createElement("main");
   session.join.mockClear();
   session.hangUp.mockClear();
-  mountCaller(root, "Grandma", (onEvent) => {
-    emit = onEvent;
-    return session;
-  });
+  awake.take.mockClear().mockReturnValue(awake.release);
+  awake.release.mockClear();
+  mountCaller(
+    root,
+    "Grandma",
+    (onEvent) => {
+      emit = onEvent;
+      return session;
+    },
+    awake.take,
+  );
 });
 
 const button = (name: string) =>
@@ -180,5 +188,23 @@ describe("call notices", () => {
     emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
 
     expect(notice()?.textContent).toBe("Connecting…");
+  });
+});
+
+describe("keeping the screen awake", () => {
+  it("doesn't while idle", () => {
+    emit({ type: "status", status: "available" });
+
+    expect(awake.take).not.toHaveBeenCalled();
+  });
+
+  it("does while calling and during the call, then lets it sleep after hanging up", () => {
+    emit({ type: "calling", camera: new MediaStream() });
+    emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+    expect(awake.take).toHaveBeenCalledTimes(1);
+
+    emit({ type: "call-ended" });
+
+    expect(awake.release).toHaveBeenCalledTimes(1);
   });
 });

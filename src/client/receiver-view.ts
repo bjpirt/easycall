@@ -1,6 +1,7 @@
 import { callNotice, type MediaState } from "./call-status";
 import { element, video } from "./dom";
 import type { StartReceiver } from "./receiver-session";
+import { keepAwake, type Release } from "./wake-lock";
 
 type State =
   | { screen: "idle"; error?: string }
@@ -12,9 +13,14 @@ type State =
  * The receiver (tablet) view. Idle shows a "Join call" button for staff;
  * joining turns on the camera and waits. Calls are answered automatically and
  * there's nothing to tap once joined. A notice shows while a call is connecting
- * or reconnecting.
+ * or reconnecting. The screen is kept awake while waiting and during a call.
  */
-export function mountReceiver(root: HTMLElement, start: StartReceiver): void {
+export function mountReceiver(
+  root: HTMLElement,
+  start: StartReceiver,
+  awake: () => Release = keepAwake,
+): void {
+  let release: Release | undefined;
   let screen: State["screen"] = "idle";
   let media: MediaState = "connecting";
   let roomReconnecting = false;
@@ -27,6 +33,15 @@ export function mountReceiver(root: HTMLElement, start: StartReceiver): void {
     root.className = `call receiver ${state.screen}`;
     root.replaceChildren(...view(state));
     updateNotice();
+    setAwake(state.screen === "waiting" || state.screen === "active");
+  };
+
+  const setAwake = (on: boolean): void => {
+    if (on) release ??= awake();
+    else {
+      release?.();
+      release = undefined;
+    }
   };
 
   const updateNotice = (): void => {
