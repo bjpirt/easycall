@@ -99,12 +99,17 @@ npx wrangler secret put ACCESS_TEAM_DOMAIN   # e.g. yourteam.cloudflareaccess.co
 npx wrangler secret put ACCESS_AUD           # the AUD tag from step 3
 npx wrangler secret put TURN_KEY_ID          # from step 4
 npx wrangler secret put TURN_KEY_API_TOKEN   # from step 4
-npx wrangler secret put DIRECTORY            # groups and members (below)
 npm run deploy
 ```
 
-`DIRECTORY` lists each group, the name callers see for its receiver, and its members' roles
-(`receiver`, `caller` or `admin`; exactly one receiver per group):
+Then set up the **directory**: the groups, the name callers see for each receiver, and each
+member's role (`receiver`, `caller` or `admin`; one receiver per group). It lives in a local
+`directory.json`, which is gitignored so members' emails never reach the repo:
+
+```sh
+cp directory.example.json directory.json   # then edit it
+npm run directory:push                      # checks it, then uploads it as the DIRECTORY secret
+```
 
 ```json
 {
@@ -121,9 +126,12 @@ npm run deploy
 }
 ```
 
-It can be pasted on one line. The group's URL is `https://easycall.<subdomain>.workers.dev/smith/`.
-Every member's email must also be on the Access policy (step 3). Changing secrets takes effect
-straight away; redeploying isn't needed.
+The group's URL is `https://easycall.<subdomain>.workers.dev/smith/`. `directory:push` checks the
+file with the same rules as the app and uploads nothing if it finds mistakes (an unknown role, two
+receivers in a group, and so on). Use `npm run directory:push -- --check` to check without
+uploading. Afterwards it lists every member's email: each must also be allowed by the Access policy
+(step 3). To add or remove someone, edit `directory.json`, run `npm run directory:push` again, and
+update the Access policy. Changes take effect straight away; redeploying isn't needed.
 
 ### 6. Try it
 

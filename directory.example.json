@@ -1,0 +1,12 @@
+{
+  "groups": {
+    "smith": {
+      "displayName": "Grandma",
+      "members": {
+        "tablet@example.com": "receiver",
+        "you@example.com": "admin",
+        "sister@example.com": "caller"
+      }
+    }
+  }
+}

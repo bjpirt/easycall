@@ -11,6 +11,8 @@ export interface Directory {
   group: (slug: string) => Group | undefined;
   /** A user's role in a group, or `undefined` if they aren't a member. Emails are case-insensitive. */
   role: (slug: string, email: string) => MemberRole | undefined;
+  /** Every member's email, across all groups (e.g. to check the Access policy allows them). */
+  emails: () => string[];
 }
 
 /** A group's slug is its URL path: lowercase letters, digits and hyphens. */
@@ -28,12 +30,18 @@ interface GroupEntry extends Group {
  *
  * Invalid members are skipped. Invalid groups, including ones with more than
  * one receiver, are skipped entirely. A missing or unreadable directory is
- * empty, so nothing is accessible. Problems are logged.
+ * empty, so nothing is accessible. Each problem is reported to `onProblem`
+ * (logged by default).
  */
-export function parseDirectory(json: string | undefined): Directory {
+export function parseDirectory(
+  json: string | undefined,
+  onProblem: (problem: string) => void = (problem) => {
+    console.error(`DIRECTORY: ${problem}`);
+  },
+): Directory {
   const groups = new Map<string, GroupEntry>();
-  for (const [slug, value] of Object.entries(readGroups(json))) {
-    const group = parseGroup(slug, value);
+  for (const [slug, value] of Object.entries(readGroups(json, onProblem))) {
+    const group = parseGroup(slug, value, onProblem);
     if (group) groups.set(slug, group);
   }
   return {
@@ -42,30 +50,50 @@ export function parseDirectory(json: string | undefined): Directory {
       return entry && { slug: entry.slug, displayName: entry.displayName };
     },
     role: (slug, email) => groups.get(slug)?.members.get(normaliseEmail(email)),
+    emails: () => [...new Set([...groups.values()].flatMap((g) => [...g.members.keys()]))].sort(),
   };
 }
 
-function parseGroup(slug: string, value: unknown): GroupEntry | undefined {
+/** Every problem with a directory: empty means it's valid. */
+export function directoryProblems(json: string): string[] {
+  const problems: string[] = [];
+  parseDirectory(json, (problem) => problems.push(problem));
+  return problems;
+}
+
+function parseGroup(
+  slug: string,
+  value: unknown,
+  onProblem: (problem: string) => void,
+): GroupEntry | undefined {
   const { displayName, members } = (value ?? {}) as { displayName?: unknown; members?: unknown };
-  if (!slugPattern.test(slug) || typeof displayName !== "string" || !displayName.trim()) {
-    console.error(`Ignoring invalid group "${slug}" in DIRECTORY`);
+  if (!slugPattern.test(slug)) {
+    onProblem(`group "${slug}" isn't a valid URL name (lowercase letters, digits and hyphens)`);
+    return undefined;
+  }
+  if (typeof displayName !== "string" || !displayName.trim()) {
+    onProblem(`group "${slug}" needs a displayName`);
     return undefined;
   }
 
   const entries = new Map<string, MemberRole>();
   const raw = typeof members === "object" && members !== null ? members : {};
   for (const [email, role] of Object.entries(raw)) {
-    if (email.includes("@") && isMemberRole(role)) entries.set(normaliseEmail(email), role);
-    else console.error(`Ignoring invalid member "${email}" in group "${slug}"`);
+    if (!email.includes("@")) onProblem(`group "${slug}": "${email}" isn't an email address`);
+    else if (!isMemberRole(role)) onProblem(`group "${slug}": ${email} has an unknown role`);
+    else entries.set(normaliseEmail(email), role);
   }
   if ([...entries.values()].filter((role) => role === "receiver").length > 1) {
-    console.error(`Ignoring group "${slug}": it has more than one receiver`);
+    onProblem(`group "${slug}" has more than one receiver`);
     return undefined;
   }
   return { slug, displayName, members: entries };
 }
 
-function readGroups(json: string | undefined): Record<string, unknown> {
+function readGroups(
+  json: string | undefined,
+  onProblem: (problem: string) => void,
+): Record<string, unknown> {
   if (!json) return {};
   try {
     const value: unknown = JSON.parse(json);
@@ -76,7 +104,7 @@ function readGroups(json: string | undefined): Record<string, unknown> {
   } catch {
     // fall through
   }
-  console.error('DIRECTORY isn\'t valid JSON of the form {"groups": {...}}');
+  onProblem('it isn\'t valid JSON of the form {"groups": {...}}');
   return {};
 }
 

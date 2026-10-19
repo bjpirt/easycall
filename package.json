@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "typecheck": "wrangler types --check && tsc --noEmit -p tsconfig.worker.json && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.e2e.json",
+    "typecheck": "wrangler types --check && tsc --noEmit -p tsconfig.worker.json && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint . && markdownlint-cli2",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "build": "vite build",
     "preview": "npm run build && vite preview",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "directory:push": "tsx scripts/push-directory.ts"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.64.0",
@@ -31,6 +32,7 @@
     "happy-dom": "^21.0.3",
     "markdownlint-cli2": "^0.23.3",
     "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4",

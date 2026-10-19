@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { parseDirectory } from "./directory";
+import { directoryProblems, parseDirectory } from "./directory";
 
 beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -88,5 +88,58 @@ describe("parseDirectory", () => {
     it("allows a group with no members yet", () => {
       expect(directoryOf({ smith: { displayName: "Grandma" } }).group("smith")).toBeDefined();
     });
+  });
+});
+
+describe("emails", () => {
+  it("lists every member once, normalised and sorted", () => {
+    const directory = directoryOf({
+      smith: { displayName: "Grandma", members: { "Zed@x.com": "caller", "amy@x.com": "admin" } },
+      jones: { displayName: "Dad", members: { "amy@x.com": "caller" } },
+    });
+
+    expect(directory.emails()).toEqual(["amy@x.com", "zed@x.com"]);
+  });
+});
+
+describe("directoryProblems", () => {
+  it("is empty for a valid directory", () => {
+    const json = JSON.stringify({
+      groups: { smith: { displayName: "Grandma", members: { "a@x.com": "receiver" } } },
+    });
+
+    expect(directoryProblems(json)).toEqual([]);
+  });
+
+  it("describes every problem", () => {
+    const json = JSON.stringify({
+      groups: {
+        "Bad Name": { displayName: "X" },
+        nameless: {},
+        smith: {
+          displayName: "Grandma",
+          members: {
+            "not-an-email": "caller",
+            "a@x.com": "boss",
+            "r1@x.com": "receiver",
+            "r2@x.com": "receiver",
+          },
+        },
+      },
+    });
+
+    expect(directoryProblems(json)).toEqual([
+      'group "Bad Name" isn\'t a valid URL name (lowercase letters, digits and hyphens)',
+      'group "nameless" needs a displayName',
+      'group "smith": "not-an-email" isn\'t an email address',
+      'group "smith": a@x.com has an unknown role',
+      'group "smith" has more than one receiver',
+    ]);
+  });
+
+  it("reports JSON that isn't a directory", () => {
+    expect(directoryProblems("[1, 2]")).toEqual([
+      'it isn\'t valid JSON of the form {"groups": {...}}',
+    ]);
   });
 });
