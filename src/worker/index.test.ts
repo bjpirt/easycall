@@ -149,13 +149,19 @@ describe("/<group>/api/room", () => {
   it("keeps each group's room separate", async () => {
     const caller = await connect("/beta/api/room", await as("caller@example.com"));
     await vi.waitFor(() => {
-      expect(caller.messages).toEqual([{ type: "status", status: "unavailable" }]);
+      expect(caller.messages).toEqual([
+        { type: "welcome", resumed: false },
+        { type: "status", status: "unavailable" },
+      ]);
     });
 
     const otherGroup = await connect("/alpha/api/room", await as("receiver@example.com"));
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    expect(caller.messages).toEqual([{ type: "status", status: "unavailable" }]);
+    expect(caller.messages).toEqual([
+      { type: "welcome", resumed: false },
+      { type: "status", status: "unavailable" },
+    ]);
     for (const { ws } of [caller, otherGroup]) ws.close();
   });
 });

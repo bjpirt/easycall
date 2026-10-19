@@ -18,7 +18,26 @@ export const users = {
   admin: "admin@e2e.test",
 } as const;
 
-/** Every E2E group (one per parallel worker) has the same members. */
+/** The test server's grace period for dropped connections (short, so expiry can be tested). */
+export const graceSeconds = 3;
+
+/**
+ * Each parallel worker gets a few groups and rotates through them. A room holds
+ * a dropped participant's place for the grace period, so a test mustn't reuse a
+ * group that a previous test left within that time (see the `group` fixture).
+ */
+export const groupsPerWorker = 4;
+export const maxWorkers = 16;
+
+export function e2eGroupName(worker: number, index: number): string {
+  return `e2e-${String(worker)}-${String(index)}`;
+}
+
+export const e2eGroups = Array.from({ length: maxWorkers }, (_, worker) =>
+  Array.from({ length: groupsPerWorker }, (_, index) => e2eGroupName(worker, index)),
+).flat();
+
+/** Every E2E group has the same members. */
 export const e2eGroup = {
   displayName: "Grandma",
   members: {

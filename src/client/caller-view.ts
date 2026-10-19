@@ -8,12 +8,14 @@ type Screen =
   | { screen: "calling"; camera: MediaStream }
   | { screen: "active"; camera: MediaStream; remote: MediaStream };
 
-type Availability = Status | "connecting" | "disconnected";
+type Availability = Status | "connecting" | "reconnecting" | "disconnected";
 
 function statusText(availability: Availability, name: string): string {
   switch (availability) {
     case "connecting":
       return "Connecting…";
+    case "reconnecting":
+      return "Reconnecting…";
     case "unavailable":
       return `${name} isn't available right now`;
     case "available":
@@ -21,7 +23,7 @@ function statusText(availability: Availability, name: string): string {
     case "in-call":
       return `${name} is in a call`;
     case "disconnected":
-      return "Lost connection. Reload the page to try again.";
+      return "Disconnected. Reload the page to try again.";
   }
 }
 
@@ -78,9 +80,15 @@ export function mountCaller(
   const session = connect((event) => {
     switch (event.type) {
       case "status":
-      case "disconnected":
-        availability = event.type === "status" ? event.status : "disconnected";
+        availability = event.status;
         if (screen.screen === "idle") render();
+        return;
+      case "connection":
+        // Once reconnected, the room sends the status again.
+        if (event.state !== "connected") {
+          availability = event.state === "reconnecting" ? "reconnecting" : "disconnected";
+          if (screen.screen === "idle") render();
+        }
         return;
       case "calling":
         render({ screen: "calling", camera: event.camera });

@@ -22,6 +22,11 @@ export type Message =
   | Signal
   /** A deliberate end to the call, as opposed to a lost connection. */
   | { type: "hangup" }
+  /**
+   * Room → anyone who connects, first. `resumed` means they've got their place
+   * back after a dropped connection (e.g. they're still in the call).
+   */
+  | { type: "welcome"; resumed: boolean }
   /** Caller → room: start a call with the receiver. */
   | { type: "join" }
   /** Room → caller: you're in the call; send your offer. */
@@ -58,6 +63,10 @@ export function parseMessage(raw: unknown): Message | undefined {
     case "refused":
     case "timeout":
       return { type: value.type };
+    case "welcome":
+      return typeof value.resumed === "boolean"
+        ? { type: "welcome", resumed: value.resumed }
+        : undefined;
     case "status":
       return isStatus(value.status) ? { type: "status", status: value.status } : undefined;
     default:

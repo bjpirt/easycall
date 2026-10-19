@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 
 // E2E tests supply their own groups, session secret and a short ready window via env vars.
 const vars = Object.fromEntries(
-  ["READY_WINDOW_MINUTES", "DIRECTORY", "SESSION_SECRET"].flatMap((name) => {
+  ["READY_WINDOW_MINUTES", "GRACE_SECONDS", "DIRECTORY", "SESSION_SECRET"].flatMap((name) => {
     const value = process.env[name];
     return value ? [[name, value]] : [];
   }),

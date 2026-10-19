@@ -1,6 +1,7 @@
 import type { IceServer } from "../shared/ice";
 import type { PeerFactory } from "./peer";
-import { onMessage, socketPeer, stopCamera, type RoomSocket } from "./signalling";
+import { openRoom, type RoomConnection } from "./room-connection";
+import { stopCamera, type RoomSocket } from "./signalling";
 
 export interface ReceiverDeps {
   getCamera: () => Promise<MediaStream>;
@@ -12,7 +13,9 @@ export interface ReceiverDeps {
 export type ReceiverEvent =
   | { type: "waiting"; camera: MediaStream }
   | { type: "remote"; camera: MediaStream; remote: MediaStream }
-  | { type: "ended"; reason?: string };
+  | { type: "ended"; reason?: string }
+  /** The room connection: `reconnecting` after a drop, `connected` once back. */
+  | { type: "connection"; state: "connected" | "reconnecting" };
 
 export interface ReceiverSession {
   /** Leaves the room, which makes the receiver unavailable. */
@@ -23,8 +26,10 @@ export type StartReceiver = (onEvent: (event: ReceiverEvent) => void) => Receive
 
 /**
  * The receiver's session: turn on the camera and join the room, which makes the
- * receiver available. An incoming call is answered automatically. When it ends,
- * or nobody calls in time, the session ends and the receiver goes back to idle.
+ * receiver available. An incoming call is answered automatically. A dropped
+ * connection reconnects by itself (the room holds the receiver's place, so a
+ * call carries on). When the call ends, or nobody calls in time, the session
+ * ends and the receiver goes back to idle.
  */
 export function receiverStarter(deps: ReceiverDeps): StartReceiver {
   return (onEvent) => {
@@ -53,41 +58,57 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
         return;
       }
 
-      const socket = deps.connect();
-      const peer = socketPeer(deps.createPeer, socket, camera, iceServers, (remote) => {
-        onEvent({ type: "remote", camera, remote });
+      let inCall = false;
+      let welcomed = false;
+      const peer = deps.createPeer({
+        localStream: camera,
+        iceServers,
+        send: (signal) => {
+          room.send(signal);
+        },
+        onRemoteStream: (remote) => {
+          inCall = true;
+          onEvent({ type: "remote", camera, remote });
+        },
+      });
+      const room: RoomConnection = openRoom(deps.connect, {
+        onMessage: (message) => {
+          switch (message.type) {
+            case "welcome":
+              onEvent({ type: "connection", state: "connected" });
+              // Back after a drop, but the room didn't keep our place: the call is over.
+              if (inCall && !message.resumed) end("The call has ended.");
+              else if (!welcomed) onEvent({ type: "waiting", camera });
+              welcomed = true;
+              return;
+            case "offer":
+            case "answer":
+            case "candidate":
+              peer.handle(message).catch(console.error);
+              return;
+            case "hangup":
+              end("The call has ended.");
+              return;
+            case "timeout":
+              end("No calls just now.");
+              return;
+            default:
+              return;
+          }
+        },
+        onReconnecting: () => {
+          onEvent({ type: "connection", state: "reconnecting" });
+        },
+        onClosed: () => {
+          end("This screen was opened somewhere else.");
+        },
       });
 
       teardown = () => {
         peer.close();
         stopCamera(camera);
-        socket.close();
+        room.close();
       };
-
-      socket.addEventListener("open", () => {
-        onEvent({ type: "waiting", camera });
-      });
-      onMessage(socket, (message) => {
-        switch (message.type) {
-          case "offer":
-          case "answer":
-          case "candidate":
-            peer.handle(message).catch(console.error);
-            return;
-          case "hangup":
-            end("The call has ended.");
-            return;
-          case "timeout":
-            end("No calls just now.");
-            return;
-          default:
-            return;
-        }
-      });
-      // Reconnecting comes later (step 23); for now losing the room ends the session.
-      socket.addEventListener("close", () => {
-        end("Lost connection.");
-      });
     };
 
     void run();

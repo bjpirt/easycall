@@ -99,12 +99,24 @@ describe("caller view", () => {
     expect(root.textContent).toContain("The call has ended.");
   });
 
-  it("shows a lost connection with Join call disabled", () => {
+  it.each([
+    ["reconnecting", "Reconnecting…"],
+    ["closed", "Disconnected. Reload the page to try again."],
+  ] as const)("when the connection is %s, says so with Join call disabled", (state, text) => {
     emit({ type: "status", status: "available" });
 
-    emit({ type: "disconnected" });
+    emit({ type: "connection", state });
 
-    expect(root.textContent).toContain("Lost connection");
+    expect(root.textContent).toContain(text);
     expect(button("Join call")?.disabled).toBe(true);
+  });
+
+  it("once reconnected, waits for the room's status", () => {
+    emit({ type: "connection", state: "reconnecting" });
+
+    emit({ type: "connection", state: "connected" });
+    emit({ type: "status", status: "available" });
+
+    expect(root.textContent).toContain("Grandma is ready for a call");
   });
 });

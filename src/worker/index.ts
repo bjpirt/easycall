@@ -60,9 +60,13 @@ export default {
         // Credentials are per call, so never cache them.
         return Response.json({ iceServers: await iceServers(env) }, { headers: noStore });
       case "/api/room": {
-        // The room trusts this role: it comes from the directory, never from the browser.
+        // The room trusts these: the role comes from the directory and the email from
+        // the session, never from the browser.
         const target = new URL(request.url);
-        target.search = new URLSearchParams({ role: roomRole(member.role) }).toString();
+        target.search = new URLSearchParams({
+          role: roomRole(member.role),
+          email: member.email,
+        }).toString();
         return env.ROOM.getByName(group.slug).fetch(new Request(target, request));
       }
       default:

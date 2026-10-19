@@ -4,9 +4,8 @@ import { defineConfig, devices } from "@playwright/test";
 // Before importing e2e/config, which reads it.
 process.env.E2E_SESSION_SECRET ??= randomBytes(32).toString("base64url");
 
-const { baseURL, e2eGroup, e2eSessionSecret, port } = await import("./e2e/config");
-
-const groups = Array.from({ length: 16 }, (_, i) => `e2e-${String(i)}`);
+const { baseURL, e2eGroup, e2eGroups, e2eSessionSecret, graceSeconds, port } =
+  await import("./e2e/config");
 
 export default defineConfig({
   testDir: "e2e",
@@ -38,13 +37,17 @@ export default defineConfig({
     command: `npm run build && npx vite preview --port ${String(port)} --strictPort`,
     // Ready once the Worker answers: a 401 (no session) counts as up. Pages redirect
     // to /login, and the root is deliberately a 404.
-    url: `${baseURL}/e2e-0/api/me`,
+    url: `${baseURL}/${e2eGroups[0] ?? ""}/api/me`,
     reuseExistingServer: !process.env.CI,
     env: {
       // A 6-second ready window, so the timeout test doesn't take 30 minutes.
       READY_WINDOW_MINUTES: "0.1",
-      // One group per parallel worker (see e2e/fixtures.ts), so tests don't share rooms.
-      DIRECTORY: JSON.stringify({ groups: Object.fromEntries(groups.map((g) => [g, e2eGroup])) }),
+      // A short grace period for dropped connections, so expiry can be tested quickly.
+      GRACE_SECONDS: String(graceSeconds),
+      // A few groups per parallel worker (see e2e/fixtures.ts), so tests don't share rooms.
+      DIRECTORY: JSON.stringify({
+        groups: Object.fromEntries(e2eGroups.map((g) => [g, e2eGroup])),
+      }),
       SESSION_SECRET: e2eSessionSecret,
     },
   },
