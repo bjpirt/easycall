@@ -17,8 +17,13 @@ It runs entirely on Cloudflare: a Worker serves the web app and API, a Durable
 Object per group handles signalling and call state, and media goes peer-to-peer
 over WebRTC with Cloudflare TURN as a fallback.
 
-**Status:** early development. See [CLAUDE.md](CLAUDE.md) for the design and
+**Status:** early development. See [CLAUDE.md](CLAUDE.md) for the decisions and
 build plan.
+
+## Documentation
+
+- [Design](docs/design.md): how the code fits together, with sequence diagrams of the main flows.
+- [Acceptance tests](docs/manual-tests.md): step-by-step tests on real devices that anyone can run.
 
 ## Running locally
 
@@ -185,6 +190,9 @@ Real devices and networks are checked by hand, with step-by-step tests anyone ca
 [docs/manual-tests.md](docs/manual-tests.md).
 
 ## Development
+
+How the code is designed (architecture, the room's rules, and sequence diagrams of the main
+flows) is described in [docs/design.md](docs/design.md).
 
 ```sh
 npm run check    # type checks, lint, formatting and tests (must pass before committing)

@@ -248,6 +248,7 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 - All code linted and unit tested as we go.
 - **A feature is NEVER complete until all tests, type checks and linting pass.**
 - Keep this file updated with decisions as we make them. It's the project memory.
+- **`docs/design.md`** is the technical design write-up for developers (architecture, the room's rules, Mermaid sequence and state diagrams of the main flows). Keep it in step with design changes. Check diagrams render (Mermaid 11) after editing them.
 - **Step workflow (agreed):** build the step → `npm run check` passes → demo/summary to the owner → **the owner signs it off** → then Claude makes one git commit for that step. Never commit before sign-off. (Exception, agreed: phase D steps 14–18 were committed one by one as each passed `npm run check`, and reviewed together at the end. Phase F is back to stopping for sign-off after each step.) Commit straight to `main` (no branches for now).
 - **Version control (agreed):** git, with a commit per signed-off step; a **public** GitHub repo `easycall` (agreed), so never commit personal details, emails, user lists or secrets; GitHub Actions runs `npm run check` on every push. Pushes to `main` auto-deploy once CI passes (step 20).
 
