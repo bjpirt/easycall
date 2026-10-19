@@ -117,6 +117,19 @@ describe("the page", () => {
   it("is 404 for someone who isn't a member", async () => {
     expect((await get("/beta/", await as("admin@example.com"))).status).toBe(404);
   });
+
+  it("doesn't let anyone signed out find out which groups exist", async () => {
+    for (const [real, madeUp] of [
+      ["/alpha", "/nobody"],
+      ["/alpha/", "/nobody/"],
+      ["/alpha/api/me", "/nobody/api/me"],
+      ["/alpha/api/room", "/nobody/api/room"],
+    ]) {
+      const [a, b] = await Promise.all([get(real ?? ""), get(madeUp ?? "")]);
+      expect([a.status, b.status]).toEqual([b.status, a.status]);
+      expect(a.status).not.toBe(404);
+    }
+  });
 });
 
 describe("the APIs", () => {
@@ -178,6 +191,30 @@ describe("/<group>/api/ice-servers", () => {
 });
 
 describe("/<group>/api/room", () => {
+  it("refuses connections from other sites", async () => {
+    const init = withHeader(await as("caller@example.com"), "Upgrade", "websocket");
+
+    const response = await get(
+      "/alpha/api/room",
+      withHeader(init, "Origin", "https://evil.example"),
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.webSocket).toBeNull();
+  });
+
+  it("accepts connections from our own pages", async () => {
+    const caller = await connect(
+      "/alpha/api/room",
+      withHeader(await as("caller@example.com"), "Origin", "http://example.com"),
+    );
+
+    await vi.waitFor(() => {
+      expect(caller.messages).toContainEqual({ type: "status", status: "unavailable" });
+    });
+    caller.ws.close();
+  });
+
   it("takes the role from the directory, not the URL", async () => {
     // A caller claiming to be the receiver still joins as a caller (callers get a status).
     const caller = await connect("/alpha/api/room?role=receiver", await as("caller@example.com"));
@@ -217,18 +254,33 @@ describe("/<group>/api/room", () => {
   });
 });
 
+const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
+
 describe("/dev-login", () => {
   it("doesn't exist unless DEV_LOGIN is enabled", async () => {
     expect((await get("/dev-login?email=admin@example.com")).status).toBe(404);
   });
 
-  it("signs in when DEV_LOGIN is enabled", async () => {
-    const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
-    const request = new IncomingRequest(
-      "http://example.com/dev-login?email=caller@example.com&next=/alpha/",
+  const devLoginAt = (host: string) =>
+    worker.fetch(
+      new IncomingRequest(`http://${host}/dev-login?email=caller@example.com&next=/alpha/`),
+      { ...env, DEV_LOGIN: "true" },
     );
 
-    const response = await worker.fetch(request, { ...env, DEV_LOGIN: "true" });
+  it("doesn't exist anywhere but on a local address, even with DEV_LOGIN enabled", async () => {
+    expect((await devLoginAt("example.com")).status).toBe(404);
+    expect((await devLoginAt("localhost.example.com")).status).toBe(404);
+  });
+
+  it.each(["localhost", "localhost:8787", "127.0.0.1"])(
+    "signs in on %s when DEV_LOGIN is enabled",
+    async (host) => {
+      expect((await devLoginAt(host)).status).toBe(302);
+    },
+  );
+
+  it("signs in when DEV_LOGIN is enabled", async () => {
+    const response = await devLoginAt("localhost");
 
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/alpha/");

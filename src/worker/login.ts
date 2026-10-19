@@ -1,12 +1,13 @@
 import type { JWTVerifyGetKey } from "jose";
 import { verifyAccess } from "./access";
+import { devLoginEnabled } from "./dev-login";
 import { safePath } from "./safe-path";
 import { sessionCookie } from "./session";
 
 /**
  * `/login?next=/group/`: Cloudflare Access guards this path (email one-time
  * PIN). Once through, we check Access's token, start our own long-lived session
- * and go to `next`. Locally (DEV_LOGIN=true) it hands over to /dev-login.
+ * and go to `next`. Locally (see `devLoginEnabled`) it hands over to /dev-login.
  */
 export async function login(
   request: Request,
@@ -15,9 +16,9 @@ export async function login(
   keys?: JWTVerifyGetKey,
 ): Promise<Response> {
   const url = new URL(request.url);
-  const next = safePath(url.searchParams.get("next"));
+  const next = safePath(url.searchParams.get("next"), url);
 
-  if (env.DEV_LOGIN === "true") {
+  if (devLoginEnabled(env, url)) {
     return Response.redirect(
       new URL(`/dev-login?next=${encodeURIComponent(next)}`, url).toString(),
       302,

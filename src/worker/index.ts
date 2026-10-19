@@ -1,7 +1,6 @@
-import type { MemberRole } from "../shared/roles";
 import { roomRole } from "../shared/roles";
-import { devLogin } from "./dev-login";
-import { parseDirectory, type Directory, type Group } from "./directory";
+import { devLogin, devLoginEnabled } from "./dev-login";
+import { parseDirectory, slugPattern } from "./directory";
 import { homePage } from "./home";
 import { login } from "./login";
 import { manifest } from "./manifest";
@@ -16,15 +15,16 @@ export { Room } from "./room";
  *   /                          the home page, or your group's page if you're signed in
  *   /version                   the deployed app version (public), so open pages can update
  *   /login                     sign in (guarded by Cloudflare Access)
- *   /dev-login                 local sign-in (only when DEV_LOGIN=true)
+ *   /dev-login                 local sign-in (only with DEV_LOGIN=true, on localhost)
  *   /<group>/                  the app (same page for every role)
  *   /<group>/manifest.webmanifest   the installable app, for your role
  *   /<group>/api/me            who you are in the group
  *   /<group>/api/ice-servers   STUN/TURN servers for a call
  *   /<group>/api/room          WebSocket to the group's room
  * Group routes need a member's session: without one, the page redirects to
- * /login and the APIs return 401; non-members get a 404. Everything else is a
- * 404. Built assets (/assets/*) and icons (/icons/*) are served by Cloudflare
+ * /login and the APIs return 401, whether or not the group exists (so nobody
+ * can find out which do); non-members get a 404. The room only accepts
+ * WebSockets from our own pages. Everything else is a 404. Built assets (/assets/*) and icons (/icons/*) are served by Cloudflare
  * without the Worker.
  */
 export default {
@@ -35,8 +35,8 @@ export default {
       return Response.json({ version: appVersion }, { headers: noStore });
     }
     if (url.pathname === "/login") return login(request, env);
-    if (url.pathname === "/dev-login" && env.DEV_LOGIN === "true") {
-      return devLogin(request, env.SESSION_SECRET);
+    if (url.pathname === "/dev-login") {
+      return devLoginEnabled(env, url) ? devLogin(request, env.SESSION_SECRET) : notFound();
     }
 
     const directory = parseDirectory(env.DIRECTORY);
@@ -50,21 +50,26 @@ export default {
       });
     }
 
+    // Until you're signed in, every possible group looks the same, so nobody can
+    // find out which groups exist (a group's name might be a family's surname).
     const [, slug, rest] = /^\/([^/]+)(\/.*)?$/.exec(url.pathname) ?? [];
-    const group = slug ? directory.group(slug) : undefined;
-    if (!group) return notFound();
+    if (!slug || !slugPattern.test(slug)) return notFound();
     if (rest === undefined) {
-      return Response.redirect(new URL(`/${group.slug}/${url.search}`, url).toString(), 301);
+      return Response.redirect(new URL(`/${slug}/${url.search}`, url).toString(), 301);
     }
 
-    const member = await authenticate(request, env, directory, group);
-    if (member.type === "not-member") return notFound();
-    if (member.type === "signed-out") {
+    const secret = env.SESSION_SECRET;
+    const email = await readSession(request, secret);
+    if (!email || !secret) {
       if (rest !== "/")
         return Response.json({ error: "Not signed in" }, { status: 401, headers: noStore });
       const next = encodeURIComponent(url.pathname + url.search);
       return Response.redirect(new URL(`/login?next=${next}`, url).toString(), 302);
     }
+    const group = directory.group(slug);
+    const membership = group && directory.member(slug, email);
+    if (!group || !membership) return notFound();
+    const member = { email, ...membership };
 
     switch (rest) {
       case "/":
@@ -81,14 +86,18 @@ export default {
             role: member.role,
             receiverName: group.receiverName,
           },
-          {
-            headers: { ...noStore, "Set-Cookie": await sessionCookie(member.email, member.secret) },
-          },
+          { headers: { ...noStore, "Set-Cookie": await sessionCookie(member.email, secret) } },
         );
       case "/api/ice-servers":
         // Credentials are per call, so never cache them.
         return Response.json({ iceServers: await iceServers(env) }, { headers: noStore });
       case "/api/room": {
+        // Only our own pages may connect (browsers send Origin with WebSockets), so
+        // another site can't open a connection with a member's cookie.
+        const origin = request.headers.get("Origin");
+        if (origin !== null && origin !== url.origin) {
+          return new Response("Forbidden", { status: 403 });
+        }
         // The room trusts these: the role and name come from the directory and the
         // email from the session, never from the browser. Only the page id (which
         // tells apart pages signed in as the same person) comes from the browser.
@@ -106,26 +115,6 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>;
-
-type Member =
-  /** `secret` is the session secret (known to be set), for renewing the cookie. */
-  | { type: "member"; email: string; name: string; role: MemberRole; secret: string }
-  | { type: "signed-out" }
-  | { type: "not-member" };
-
-/** Who's making the request, and whether they're in the group. */
-async function authenticate(
-  request: Request,
-  env: Env,
-  directory: Directory,
-  group: Group,
-): Promise<Member> {
-  const secret = env.SESSION_SECRET;
-  const email = await readSession(request, secret);
-  if (!email || !secret) return { type: "signed-out" };
-  const member = directory.member(group.slug, email);
-  return member ? { type: "member", email, ...member, secret } : { type: "not-member" };
-}
 
 const noStore = { "Cache-Control": "no-store" };
 

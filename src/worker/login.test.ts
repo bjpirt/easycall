@@ -52,12 +52,35 @@ describe("login", () => {
     expect((await login(request("/login"), env, team.keys)).status).toBe(500);
   });
 
-  it("hands over to /dev-login when DEV_LOGIN is enabled", async () => {
-    const response = await login(request("/login?next=/alpha/"), { ...env, DEV_LOGIN: "true" });
+  it("hands over to /dev-login when DEV_LOGIN is enabled, locally", async () => {
+    const local = new Request("http://localhost:8787/login?next=/alpha/");
+
+    const response = await login(local, { ...env, DEV_LOGIN: "true" });
 
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe(
-      "https://easycall.example/dev-login?next=%2Falpha%2F",
+      "http://localhost:8787/dev-login?next=%2Falpha%2F",
     );
+  });
+
+  it("ignores DEV_LOGIN anywhere else, still needing Access", async () => {
+    const response = await login(request("/login?next=/alpha/"), {
+      ...configured,
+      DEV_LOGIN: "true",
+    });
+
+    expect(response.status).toBe(401);
+  });
+
+  it("won't redirect to another site via a tab in next", async () => {
+    const token = await team.sign({ email: "caller@example.com" });
+
+    const response = await login(
+      request("/login?next=/%09/evil.example/", token),
+      configured,
+      team.keys,
+    );
+
+    expect(response.headers.get("Location")).toBe("/");
   });
 });

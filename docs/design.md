@@ -87,21 +87,23 @@ flowchart LR
 
 ### Routes
 
-| Path                            | Who                        | What                                                       |
-| ------------------------------- | -------------------------- | ---------------------------------------------------------- |
-| `/`                             | Anyone                     | Home page; signed-in members are redirected to their group |
-| `/login`                        | Guarded by Access          | Verifies Access's token, sets our session cookie           |
-| `/dev-login`                    | Only when `DEV_LOGIN=true` | Local sign-in without Access                               |
-| `/version`                      | Anyone                     | The deployed version, so open pages can update             |
-| `/<group>/`                     | Members                    | The app (the same page for every role)                     |
-| `/<group>/manifest.webmanifest` | Members                    | The installable app, for your role                         |
-| `/<group>/api/me`               | Members                    | Your role and name, and the receiver's name                |
-| `/<group>/api/ice-servers`      | Members                    | STUN/TURN servers for a call                               |
-| `/<group>/api/room`             | Members                    | WebSocket to the group's room                              |
+| Path                            | Who                                      | What                                                       |
+| ------------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
+| `/`                             | Anyone                                   | Home page; signed-in members are redirected to their group |
+| `/login`                        | Guarded by Access                        | Verifies Access's token, sets our session cookie           |
+| `/dev-login`                    | Only with `DEV_LOGIN=true`, on localhost | Local sign-in without Access                               |
+| `/version`                      | Anyone                                   | The deployed version, so open pages can update             |
+| `/<group>/`                     | Members                                  | The app (the same page for every role)                     |
+| `/<group>/manifest.webmanifest` | Members                                  | The installable app, for your role                         |
+| `/<group>/api/me`               | Members                                  | Your role and name, and the receiver's name                |
+| `/<group>/api/ice-servers`      | Members                                  | STUN/TURN servers for a call                               |
+| `/<group>/api/room`             | Members                                  | WebSocket to the group's room                              |
 
-A group route without a session redirects to `/login` (pages) or returns 401 (APIs). A
-non-member gets 404, as does anything unknown. Built assets and icons are served without running
-the Worker.
+A group route without a session redirects to `/login` (pages) or returns 401 (APIs), whether
+or not the group exists, so nobody can find out which groups do. Once signed in, a non-member gets
+404, as does anything unknown. The room only accepts WebSockets whose `Origin` is the app's own.
+After signing in, `next` is resolved the way a browser would and only kept if it's on this site.
+Built assets and icons are served without running the Worker.
 
 ### Signing in
 

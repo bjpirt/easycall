@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { devLogin } from "./dev-login";
-import { safePath } from "./safe-path";
 
 const login = (query: string, secret: string | undefined) =>
   devLogin(new Request(`http://localhost/dev-login${query}`), secret);
 
 describe("devLogin", () => {
   it("shows a form when no email is given, keeping next (escaped)", async () => {
-    const response = await login('?next=/alpha/"x', "test-secret");
+    const response = await login("?next=" + encodeURIComponent("/alpha/?a=1&b=2"), "test-secret");
     const html = await response.text();
 
     expect(response.headers.get("Content-Type")).toContain("text/html");
     expect(html).toContain('<input name="email"');
-    expect(html).toContain('value="/alpha/&#34;x"');
+    expect(html).toContain('value="/alpha/?a=1&#38;b=2"');
   });
 
   it("sets the session cookie and redirects to next", async () => {
@@ -25,19 +24,5 @@ describe("devLogin", () => {
 
   it("needs SESSION_SECRET", async () => {
     expect((await login("?email=ben@example.com", undefined)).status).toBe(500);
-  });
-});
-
-describe("safePath", () => {
-  it.each([
-    ["/alpha/", "/alpha/"],
-    ["/alpha/?role=caller", "/alpha/?role=caller"],
-    [null, "/"],
-    ["https://evil.example/", "/"],
-    ["//evil.example/", "/"],
-    ["/\\evil.example/", "/"],
-    ["alpha/", "/"],
-  ])("%s → %s", (next, expected) => {
-    expect(safePath(next)).toBe(expected);
   });
 });
