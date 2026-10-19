@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
 
-// Before importing e2e/config, which reads it.
+// Before importing e2e/config, which reads them. Inherited by the workers.
 process.env.E2E_SESSION_SECRET ??= randomBytes(32).toString("base64url");
+process.env.E2E_RUN_ID ??= randomBytes(8).toString("hex");
 
 const { baseURL, e2eGroup, e2eGroups, e2eSessionSecret, graceSeconds, port } =
   await import("./e2e/config");
@@ -49,6 +50,8 @@ export default defineConfig({
         groups: Object.fromEntries(e2eGroups.map((g) => [g, e2eGroup(g)])),
       }),
       SESSION_SECRET: e2eSessionSecret,
+      // Rooms start empty: nothing left over from an earlier run (see vite.config.ts).
+      E2E: "true",
     },
   },
 });

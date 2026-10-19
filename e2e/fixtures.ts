@@ -1,16 +1,35 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test as base, type Browser, type Page } from "@playwright/test";
 import { cookieName, sessionToken } from "../src/worker/session";
 import {
   baseURL,
   e2eGroupName,
+  e2eRunId,
   e2eSessionSecret,
   graceSeconds,
   e2eUsers,
   groupsPerWorker,
 } from "./config";
 
-/** When each of this worker's groups was last used (each worker is its own process). */
-const lastUsed = new Map<string, number>();
+/**
+ * When each of a parallel slot's groups was last used (group → time), in a file
+ * for this run. Not in memory: Playwright replaces a worker after a failure (and
+ * for each --repeat-each), and its replacement, in the same slot, must still
+ * know which groups are busy holding a call for its grace period.
+ */
+function lastUsedFile(slot: number): string {
+  return join(tmpdir(), `easycall-e2e-${e2eRunId}-${String(slot)}.json`);
+}
+
+function readLastUsed(slot: number): Record<string, number> {
+  try {
+    return JSON.parse(readFileSync(lastUsedFile(slot), "utf8")) as Record<string, number>;
+  } catch {
+    return {}; // none used yet
+  }
+}
 
 interface Fixtures {
   /** This test's group: never shared with a concurrent test, nor reused within the grace period. */
@@ -54,16 +73,23 @@ function signedInPage(who: keyof ReturnType<typeof e2eUsers>) {
 export const test = base.extend<Fixtures>({
   // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructuring pattern
   group: async ({}, use, testInfo) => {
-    // This worker's least recently used group, waiting out any grace period left
-    // over from the test that last used it.
-    const pool = Array.from({ length: groupsPerWorker }, (_, i) =>
-      e2eGroupName(testInfo.parallelIndex, i),
-    );
-    const [group = ""] = pool.sort((a, b) => (lastUsed.get(a) ?? 0) - (lastUsed.get(b) ?? 0));
-    const wait = (lastUsed.get(group) ?? 0) + graceSeconds * 1000 + 500 - Date.now();
+    // This slot's least recently used group, waiting out any grace period left
+    // over from the test that last used it. (Only one worker uses a slot at a time.)
+    const slot = testInfo.parallelIndex;
+    const markUsed = (group: string): void => {
+      writeFileSync(
+        lastUsedFile(slot),
+        JSON.stringify({ ...readLastUsed(slot), [group]: Date.now() }),
+      );
+    };
+    const lastUsed = readLastUsed(slot);
+    const pool = Array.from({ length: groupsPerWorker }, (_, i) => e2eGroupName(slot, i));
+    const [group = ""] = pool.sort((a, b) => (lastUsed[a] ?? 0) - (lastUsed[b] ?? 0));
+    const wait = (lastUsed[group] ?? 0) + graceSeconds * 1000 + 500 - Date.now();
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    markUsed(group); // in case this worker is replaced mid-test
     await use(group);
-    lastUsed.set(group, Date.now());
+    markUsed(group);
   },
   users: async ({ group }, use) => {
     await use(e2eUsers(group));

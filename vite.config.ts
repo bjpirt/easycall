@@ -20,7 +20,13 @@ function version(): string {
 }
 
 export default defineConfig({
-  plugins: [cloudflare(Object.keys(vars).length ? { config: { vars } } : {})],
+  plugins: [
+    cloudflare({
+      ...(Object.keys(vars).length ? { config: { vars } } : {}),
+      // E2E rooms start empty each run: saved state could hold a previous run's call.
+      persistState: !process.env.E2E,
+    }),
+  ],
   // Baked into both the Worker and the page, so open pages can tell they're out of date.
   define: { __APP_VERSION__: JSON.stringify(version()) },
   server: { port: 8787 },

@@ -11,6 +11,9 @@ export const baseURL = `http://localhost:${String(port)}`;
  */
 export const e2eSessionSecret = process.env.E2E_SESSION_SECRET ?? "";
 
+/** Identifies this test run (set once by playwright.config.ts and inherited by the workers). */
+export const e2eRunId = process.env.E2E_RUN_ID ?? "";
+
 /** A group's members' emails: their own for each group, since each person is in one group. */
 export function e2eUsers(group: string) {
   return {
