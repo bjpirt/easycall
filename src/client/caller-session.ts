@@ -31,6 +31,10 @@ interface Call {
   trackMedia: (state: RTCPeerConnectionState) => MediaState | undefined;
   /** The media connection as last reported. */
   media: MediaState;
+  /** An ICE restart waiting to see if a brief disconnection recovers by itself. */
+  restartTimer?: ReturnType<typeof setTimeout>;
+  /** Running while the call has no working media; when it runs out, we give up. */
+  giveUpTimer?: ReturnType<typeof setTimeout>;
 }
 
 /** How long a briefly `disconnected` call gets to recover by itself before we restart it. */
@@ -54,11 +58,10 @@ export function connectCaller(
 ): CallerSession {
   let connected = false;
   let status: Status = "unavailable";
+  /** Our call, from Join Call until it ends. Everything about it lives here, so ending it clears it all. */
   let call: Call | undefined;
   /** Set while the camera is starting, so a hang-up can cancel the join. */
   let pending: { cancelled: boolean } | undefined;
-  let restartTimer: ReturnType<typeof setTimeout> | undefined;
-  let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
 
   const giveUp = (): void => {
     room.send({ type: "hangup" });
@@ -71,34 +74,34 @@ export function connectCaller(
 
   /** Gives the call `giveUpAfterMs` to get media flowing (again), unless already counting. */
   const startGiveUpTimer = (): void => {
-    giveUpTimer ??= setTimeout(giveUp, giveUpAfterMs);
+    if (call) call.giveUpTimer ??= setTimeout(giveUp, giveUpAfterMs);
   };
 
   const restart = (): void => {
-    clearTimeout(restartTimer);
-    call?.peer.restart().catch(console.error);
+    if (!call) return;
+    clearTimeout(call.restartTimer);
+    call.peer.restart().catch(console.error);
   };
 
   const onConnectionState = (state: RTCPeerConnectionState): void => {
-    clearTimeout(restartTimer);
-    if (state === "failed") restart();
-    else if (state === "disconnected") restartTimer = setTimeout(restart, restartAfterMs);
-
     if (!call) return;
+    clearTimeout(call.restartTimer);
+    if (state === "failed") restart();
+    else if (state === "disconnected") call.restartTimer = setTimeout(restart, restartAfterMs);
+
     const media = call.trackMedia(state);
     if (media === "connected") {
-      clearTimeout(giveUpTimer);
-      giveUpTimer = undefined;
+      clearTimeout(call.giveUpTimer);
+      delete call.giveUpTimer;
     } else if (media) {
       startGiveUpTimer();
     }
   };
 
   const endCall = (reason?: string): void => {
-    clearTimeout(restartTimer);
-    clearTimeout(giveUpTimer);
-    giveUpTimer = undefined;
     if (!call) return;
+    clearTimeout(call.restartTimer);
+    clearTimeout(call.giveUpTimer);
     call.peer.close();
     stopCamera(call.camera);
     call = undefined;
