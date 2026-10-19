@@ -13,12 +13,14 @@ type State =
  * The receiver (tablet) view. Idle shows a "Join call" button for staff;
  * joining turns on the camera and waits. Calls are answered automatically and
  * there's nothing to tap once joined. A notice shows while a call is connecting
- * or reconnecting. The screen is kept awake while waiting and during a call.
+ * or reconnecting. The screen is kept awake while waiting and during a call,
+ * and Join call goes full screen (the tap is the gesture browsers require).
  */
 export function mountReceiver(
   root: HTMLElement,
   start: StartReceiver,
   awake: () => Release = keepAwake,
+  fullscreen: () => void = goFullscreen,
 ): void {
   let release: Release | undefined;
   let screen: State["screen"] = "idle";
@@ -67,6 +69,7 @@ export function mountReceiver(
   };
 
   const join = (): void => {
+    fullscreen();
     media = "connecting";
     roomReconnecting = false;
     render({ screen: "joining" });
@@ -94,4 +97,11 @@ export function mountReceiver(
   };
 
   render({ screen: "idle" });
+}
+
+/** Full screen where the browser allows it (already the case when installed). */
+function goFullscreen(): void {
+  if (document.fullscreenEnabled && !document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => undefined);
+  }
 }

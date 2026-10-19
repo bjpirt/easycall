@@ -5,8 +5,8 @@
   "compatibility_date": "2026-10-01",
   "assets": {
     "binding": "ASSETS",
-    // The Worker checks the group before serving the app; built assets skip it.
-    "run_worker_first": ["/*", "!/assets/*"],
+    // The Worker checks the group before serving the app; built assets and icons skip it.
+    "run_worker_first": ["/*", "!/assets/*", "!/icons/*"],
   },
   "durable_objects": {
     "bindings": [{ "name": "ROOM", "class_name": "Room" }],

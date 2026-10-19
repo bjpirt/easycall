@@ -19,7 +19,8 @@
     "build": "vite build",
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy",
-    "directory:push": "tsx scripts/push-directory.ts"
+    "directory:push": "tsx scripts/push-directory.ts",
+    "icons": "tsx scripts/render-icons.ts"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.64.0",

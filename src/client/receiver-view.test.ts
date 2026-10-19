@@ -4,6 +4,7 @@ import { mountReceiver } from "./receiver-view";
 
 let root: HTMLElement;
 const awake = { take: vi.fn(), release: vi.fn() };
+const fullscreen = vi.fn();
 let emit: ((event: ReceiverEvent) => void) | undefined;
 
 beforeEach(() => {
@@ -11,6 +12,7 @@ beforeEach(() => {
   emit = undefined;
   awake.take.mockClear().mockReturnValue(awake.release);
   awake.release.mockClear();
+  fullscreen.mockClear();
   mountReceiver(
     root,
     (onEvent) => {
@@ -18,6 +20,7 @@ beforeEach(() => {
       return { leave: vi.fn() };
     },
     awake.take,
+    fullscreen,
   );
 });
 
@@ -109,4 +112,12 @@ describe("keeping the screen awake", () => {
 
     expect(awake.release).toHaveBeenCalledTimes(1);
   });
+});
+
+it("goes full screen when staff tap Join call", () => {
+  expect(fullscreen).not.toHaveBeenCalled();
+
+  join();
+
+  expect(fullscreen).toHaveBeenCalledTimes(1);
 });

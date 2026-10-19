@@ -11,3 +11,8 @@ test-results/
 
 # The real directory (members' emails); see directory.example.json
 directory.json
+
+# A common global gitignore rule, Icon*, would hide these (macOS file names are case-insensitive)
+!/public/icons/
+!/public/icons/*
+!/scripts/icon.svg

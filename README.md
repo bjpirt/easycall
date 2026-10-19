@@ -149,6 +149,12 @@ address: its session then lasts a year and renews whenever the app is opened.
 | Signed in, but "Not found"             | Your email isn't in that group in `DIRECTORY`, or the group name in the URL is wrong. |
 | Video doesn't connect between networks | The TURN secrets aren't set (step 4).                                                 |
 
+### Installing the app
+
+Each group's page can be installed as an app (Chrome: **Install app** or **Add to Home screen** in the
+menu; iPhone Safari: **Share → Add to Home Screen**). Sign in first: the app depends on your role. On
+the tablet it opens full screen; for callers it's called "Call" plus the receiver's name.
+
 ### 7. Automatic deploys (optional)
 
 GitHub Actions deploys `main` to Cloudflare whenever the checks pass (`.github/workflows/check.yml`).
@@ -181,4 +187,5 @@ npm run test:e2e # end-to-end tests (builds the app and serves it automatically)
 npm run preview  # production build served locally
 npm run format   # fix formatting
 npm run types    # regenerate Worker types after changing wrangler.jsonc
+npm run icons    # re-render public/icons/*.png after changing scripts/icon.svg
 ```

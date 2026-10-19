@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed background, so the icon also works as "maskable" (Android crops it). -->
+  <rect width="512" height="512" fill="#2e7d32"/>
+  <!-- A video camera, kept inside the central safe zone (80%). -->
+  <rect x="136" y="186" width="170" height="140" rx="28" fill="#fff"/>
+  <path d="M318 236 L380 196 L380 316 L318 276 Z" fill="#fff"/>
+</svg>

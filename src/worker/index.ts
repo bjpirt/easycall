@@ -3,6 +3,7 @@ import { roomRole } from "../shared/roles";
 import { devLogin } from "./dev-login";
 import { parseDirectory, type Directory, type Group } from "./directory";
 import { login } from "./login";
+import { manifest } from "./manifest";
 import { readSession, sessionCookie } from "./session";
 import { iceServers } from "./turn";
 
@@ -13,12 +14,14 @@ export { Room } from "./room";
  *   /login                     sign in (guarded by Cloudflare Access)
  *   /dev-login                 local sign-in (only when DEV_LOGIN=true)
  *   /<group>/                  the app (same page for every role)
+ *   /<group>/manifest.webmanifest   the installable app, for your role
  *   /<group>/api/me            who you are in the group
  *   /<group>/api/ice-servers   STUN/TURN servers for a call
  *   /<group>/api/room          WebSocket to the group's room
  * Group routes need a member's session: without one, the page redirects to
  * /login and the APIs return 401; non-members get a 404. Everything else is a
- * 404. Built assets (/assets/*) are served by Cloudflare without the Worker.
+ * 404. Built assets (/assets/*) and icons (/icons/*) are served by Cloudflare
+ * without the Worker.
  */
 export default {
   async fetch(request, env): Promise<Response> {
@@ -49,6 +52,10 @@ export default {
     switch (rest) {
       case "/":
         return env.ASSETS.fetch(new URL("/", url));
+      case "/manifest.webmanifest":
+        return Response.json(manifest(group, member.role), {
+          headers: { ...noStore, "Content-Type": "application/manifest+json" },
+        });
       case "/api/me":
         return Response.json(
           { email: member.email, role: member.role, displayName: group.displayName },

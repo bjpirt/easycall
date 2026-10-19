@@ -74,23 +74,27 @@ describe("the page", () => {
 });
 
 describe("the APIs", () => {
-  it.each(["/alpha/api/me", "/alpha/api/ice-servers", "/alpha/api/room"])(
-    "%s is 401 without a valid session",
-    async (path) => {
-      expect((await get(path)).status).toBe(401);
-      expect((await get(path, { headers: { Cookie: "session=forged.token" } })).status).toBe(401);
-    },
-  );
+  it.each([
+    "/alpha/api/me",
+    "/alpha/api/ice-servers",
+    "/alpha/api/room",
+    "/alpha/manifest.webmanifest",
+  ])("%s is 401 without a valid session", async (path) => {
+    expect((await get(path)).status).toBe(401);
+    expect((await get(path, { headers: { Cookie: "session=forged.token" } })).status).toBe(401);
+  });
 
-  it.each(["/alpha/api/me", "/alpha/api/ice-servers", "/alpha/api/room"])(
-    "%s is 404 for someone who isn't a member",
-    async (path) => {
-      expect((await get(path.replace("alpha", "beta"), await as("admin@example.com"))).status).toBe(
-        404,
-      );
-      expect((await get(path, await as("stranger@example.com"))).status).toBe(404);
-    },
-  );
+  it.each([
+    "/alpha/api/me",
+    "/alpha/api/ice-servers",
+    "/alpha/api/room",
+    "/alpha/manifest.webmanifest",
+  ])("%s is 404 for someone who isn't a member", async (path) => {
+    expect((await get(path.replace("alpha", "beta"), await as("admin@example.com"))).status).toBe(
+      404,
+    );
+    expect((await get(path, await as("stranger@example.com"))).status).toBe(404);
+  });
 });
 
 describe("/<group>/api/me", () => {
@@ -187,5 +191,18 @@ describe("/dev-login", () => {
     ).toMatchObject({
       role: "caller",
     });
+  });
+});
+
+describe("/<group>/manifest.webmanifest", () => {
+  it.each([
+    ["receiver@example.com", "fullscreen"],
+    ["caller@example.com", "standalone"],
+  ])("is the installable app for %s's role (%s)", async (email, display) => {
+    const response = await get("/alpha/manifest.webmanifest", await as(email));
+
+    expect(response.headers.get("Content-Type")).toBe("application/manifest+json");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ display, start_url: "/alpha/" });
   });
 });
