@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   connectCaller,
+  giveUpAfterMs,
   restartAfterMs,
   type CallerDeps,
   type CallerEvent,
@@ -231,6 +232,72 @@ describe("caller session", () => {
       vi.advanceTimersByTime(restartAfterMs * 2);
 
       expect(peer.restart).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("media status", () => {
+    it("reports connecting, connected and interrupted", async () => {
+      const peer = await join();
+
+      peer.options.onConnectionState?.("disconnected"); // before media ever flowed
+      peer.options.onConnectionState?.("connected");
+      peer.options.onConnectionState?.("disconnected");
+
+      expect(events.filter((e) => e.type === "media")).toEqual([
+        { type: "media", state: "connecting" },
+        { type: "media", state: "connected" },
+        { type: "media", state: "interrupted" },
+      ]);
+    });
+
+    it("gives up if the call never connects, hanging up properly", async () => {
+      const peer = await join();
+      vi.useFakeTimers();
+      socket().receive({ type: "joined" });
+
+      vi.advanceTimersByTime(giveUpAfterMs);
+
+      expect(socket().sent().at(-1)).toEqual({ type: "hangup" });
+      expect(peer.close).toHaveBeenCalled();
+      expect(events.at(-1)).toEqual({
+        type: "call-ended",
+        reason: "Couldn't connect. Please try again.",
+      });
+    });
+
+    it("doesn't give up once connected", async () => {
+      const peer = await join();
+      vi.useFakeTimers();
+      socket().receive({ type: "joined" });
+
+      peer.options.onConnectionState?.("connected");
+      vi.advanceTimersByTime(giveUpAfterMs * 2);
+
+      expect(peer.close).not.toHaveBeenCalled();
+    });
+
+    it("gives up on a call that stays cut off", async () => {
+      const peer = await join();
+      peer.options.onConnectionState?.("connected");
+      vi.useFakeTimers();
+
+      peer.options.onConnectionState?.("failed");
+      vi.advanceTimersByTime(giveUpAfterMs);
+
+      expect(events.at(-1)).toEqual({ type: "call-ended", reason: "The call was cut off." });
+    });
+
+    it("keeps a recovered call going", async () => {
+      const peer = await join();
+      peer.options.onConnectionState?.("connected");
+      vi.useFakeTimers();
+
+      peer.options.onConnectionState?.("disconnected");
+      vi.advanceTimersByTime(giveUpAfterMs - 1);
+      peer.options.onConnectionState?.("connected");
+      vi.advanceTimersByTime(giveUpAfterMs);
+
+      expect(peer.close).not.toHaveBeenCalled();
     });
   });
 

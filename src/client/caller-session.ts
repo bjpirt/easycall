@@ -1,4 +1,5 @@
 import type { IceServer } from "../shared/ice";
+import { mediaState, type MediaState } from "./call-status";
 import type { Status } from "../shared/protocol";
 import type { Peer, PeerFactory } from "./peer";
 import { openRoom } from "./room-connection";
@@ -15,6 +16,8 @@ export type CallerEvent =
   | { type: "status"; status: Status }
   | { type: "calling"; camera: MediaStream }
   | { type: "remote"; camera: MediaStream; remote: MediaStream }
+  /** The call's media connection (see `MediaState`). */
+  | { type: "media"; state: MediaState }
   | { type: "call-ended"; reason?: string }
   /** The room connection: `reconnecting` after a drop, `connected` once back, `closed` for good. */
   | { type: "connection"; state: "connected" | "reconnecting" | "closed" };
@@ -31,6 +34,9 @@ interface Call {
 
 /** How long a briefly `disconnected` call gets to recover by itself before we restart it. */
 export const restartAfterMs = 3000;
+
+/** How long a call can go without a working media connection before we give up on it. */
+export const giveUpAfterMs = 30_000;
 
 /**
  * The caller's connection to the room, open for as long as the page is (and
@@ -51,6 +57,19 @@ export function connectCaller(
   /** Set while the camera is starting, so a hang-up can cancel the join. */
   let pending: { cancelled: boolean } | undefined;
   let restartTimer: ReturnType<typeof setTimeout> | undefined;
+  let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Whether media has flowed yet in this call. */
+  let connectedBefore = false;
+
+  const giveUp = (): void => {
+    room.send({ type: "hangup" });
+    endCall(connectedBefore ? "The call was cut off." : "Couldn't connect. Please try again.");
+  };
+
+  /** Gives the call `giveUpAfterMs` to get media flowing (again), unless already counting. */
+  const startGiveUpTimer = (): void => {
+    giveUpTimer ??= setTimeout(giveUp, giveUpAfterMs);
+  };
 
   const restart = (): void => {
     clearTimeout(restartTimer);
@@ -61,10 +80,22 @@ export function connectCaller(
     clearTimeout(restartTimer);
     if (state === "failed") restart();
     else if (state === "disconnected") restartTimer = setTimeout(restart, restartAfterMs);
+
+    const media = mediaState(state, connectedBefore);
+    if (media === "connected") {
+      connectedBefore = true;
+      clearTimeout(giveUpTimer);
+      giveUpTimer = undefined;
+    } else if (media) {
+      startGiveUpTimer();
+    }
+    if (media) onEvent({ type: "media", state: media });
   };
 
   const endCall = (reason?: string): void => {
     clearTimeout(restartTimer);
+    clearTimeout(giveUpTimer);
+    giveUpTimer = undefined;
     if (!call) return;
     call.peer.close();
     stopCamera(call.camera);
@@ -89,6 +120,7 @@ export function connectCaller(
           return;
         case "joined":
           call?.peer.call().catch(console.error);
+          startGiveUpTimer();
           return;
         case "refused":
           endCall(
@@ -149,6 +181,7 @@ export function connectCaller(
       onConnectionState,
     });
     call = { camera, peer };
+    connectedBefore = false;
     onEvent({ type: "calling", camera });
     room.send({ type: "join" });
   };

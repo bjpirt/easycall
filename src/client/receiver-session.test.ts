@@ -120,6 +120,18 @@ describe("receiver session", () => {
     expect(events).toEqual([{ type: "remote", camera, remote }]);
   });
 
+  it("reports the call's media status", async () => {
+    const { peer } = await start();
+
+    peer.options.onConnectionState?.("connected");
+    peer.options.onConnectionState?.("failed");
+
+    expect(events).toEqual([
+      { type: "media", state: "connected" },
+      { type: "media", state: "interrupted" },
+    ]);
+  });
+
   it.each([
     [{ type: "hangup" }, "The call has ended."],
     [{ type: "timeout" }, "No calls just now."],

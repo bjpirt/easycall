@@ -1,4 +1,5 @@
 import type { IceServer } from "../shared/ice";
+import { mediaState, type MediaState } from "./call-status";
 import type { PeerFactory } from "./peer";
 import { openRoom, type RoomConnection } from "./room-connection";
 import { stopCamera, type RoomSocket } from "./signalling";
@@ -13,6 +14,8 @@ export interface ReceiverDeps {
 export type ReceiverEvent =
   | { type: "waiting"; camera: MediaStream }
   | { type: "remote"; camera: MediaStream; remote: MediaStream }
+  /** The call's media connection (see `MediaState`). */
+  | { type: "media"; state: MediaState }
   | { type: "ended"; reason?: string }
   /** The room connection: `reconnecting` after a drop, `connected` once back. */
   | { type: "connection"; state: "connected" | "reconnecting" };
@@ -60,6 +63,7 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
 
       let inCall = false;
       let welcomed = false;
+      let connectedBefore = false;
       const peer = deps.createPeer({
         localStream: camera,
         iceServers,
@@ -69,6 +73,11 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
         onRemoteStream: (remote) => {
           inCall = true;
           onEvent({ type: "remote", camera, remote });
+        },
+        onConnectionState: (state) => {
+          const media = mediaState(state, connectedBefore);
+          if (media === "connected") connectedBefore = true;
+          if (media) onEvent({ type: "media", state: media });
         },
       });
       const room: RoomConnection = openRoom(deps.connect, {

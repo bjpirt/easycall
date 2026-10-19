@@ -59,3 +59,29 @@ describe("receiver view", () => {
     expect(root.textContent).toContain("Lost connection.");
   });
 });
+
+describe("call notices", () => {
+  const notice = () => root.querySelector<HTMLElement>(".notice");
+
+  it("shows Connecting… until media flows, and Reconnecting… if it's interrupted", () => {
+    const send = join();
+    send({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+    expect(notice()?.textContent).toBe("Connecting…");
+
+    send({ type: "media", state: "connected" });
+    expect(notice()?.hidden).toBe(true);
+
+    send({ type: "media", state: "interrupted" });
+    expect(notice()?.textContent).toBe("Reconnecting…");
+
+    send({ type: "media", state: "connected" });
+    send({ type: "connection", state: "reconnecting" });
+    expect(notice()?.textContent).toBe("Reconnecting…");
+  });
+
+  it("has no notice while waiting", () => {
+    join()({ type: "waiting", camera: new MediaStream() });
+
+    expect(notice()).toBeNull();
+  });
+});

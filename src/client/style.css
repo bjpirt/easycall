@@ -60,3 +60,20 @@ body {
 .message a {
   color: #9ccc65;
 }
+
+.call .notice {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: rgb(0 0 0 / 60%);
+}
+
+.call.calling .notice {
+  position: static;
+  transform: none;
+  background: none;
+}

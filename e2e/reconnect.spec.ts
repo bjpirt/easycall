@@ -23,7 +23,13 @@ test("the caller's connection drops and comes back: the call carries on", async 
 }) => {
   await startCall(group, receiver, caller);
 
+  await expect(caller.locator(".notice")).toBeHidden(); // media is flowing: nothing to say
+
   await dropConnection(caller);
+
+  // The caller is told, until the connection's back (the first retry is after a second).
+  await expect(caller.getByText("Reconnecting…")).toBeVisible();
+  await expect(caller.locator(".notice")).toBeHidden();
 
   // Reconnected with its place in the call kept: still connected, and Hang up still works.
   await expect(caller.getByRole("button", { name: "Hang up" })).toBeVisible();

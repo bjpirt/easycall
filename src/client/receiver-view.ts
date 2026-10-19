@@ -1,3 +1,4 @@
+import { callNotice, type MediaState } from "./call-status";
 import { element, video } from "./dom";
 import type { StartReceiver } from "./receiver-session";
 
@@ -10,12 +11,28 @@ type State =
 /**
  * The receiver (tablet) view. Idle shows a "Join call" button for staff;
  * joining turns on the camera and waits. Calls are answered automatically and
- * there's nothing to tap once joined.
+ * there's nothing to tap once joined. A notice shows while a call is connecting
+ * or reconnecting.
  */
 export function mountReceiver(root: HTMLElement, start: StartReceiver): void {
+  let screen: State["screen"] = "idle";
+  let media: MediaState = "connecting";
+  let roomReconnecting = false;
+  /** Updated in place, so the videos aren't rebuilt (which would make them flash). */
+  const notice = element("p");
+  notice.className = "notice";
+
   const render = (state: State): void => {
+    screen = state.screen;
     root.className = `call receiver ${state.screen}`;
     root.replaceChildren(...view(state));
+    updateNotice();
+  };
+
+  const updateNotice = (): void => {
+    const text = screen === "active" ? callNotice(media, roomReconnecting) : undefined;
+    notice.textContent = text ?? "";
+    notice.hidden = text === undefined;
   };
 
   const view = (state: State): HTMLElement[] => {
@@ -30,11 +47,13 @@ export function mountReceiver(root: HTMLElement, start: StartReceiver): void {
       case "waiting":
         return [element("p", "Waiting for a call…"), video(state.camera, "self-view")];
       case "active":
-        return [video(state.remote, "remote-view"), video(state.camera, "self-view")];
+        return [video(state.remote, "remote-view"), video(state.camera, "self-view"), notice];
     }
   };
 
   const join = (): void => {
+    media = "connecting";
+    roomReconnecting = false;
     render({ screen: "joining" });
     start((event) => {
       switch (event.type) {
@@ -43,6 +62,14 @@ export function mountReceiver(root: HTMLElement, start: StartReceiver): void {
           return;
         case "remote":
           render({ screen: "active", camera: event.camera, remote: event.remote });
+          return;
+        case "media":
+          media = event.state;
+          updateNotice();
+          return;
+        case "connection":
+          roomReconnecting = event.state === "reconnecting";
+          updateNotice();
           return;
         case "ended":
           render(event.reason ? { screen: "idle", error: event.reason } : { screen: "idle" });

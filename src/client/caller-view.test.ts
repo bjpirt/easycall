@@ -120,3 +120,65 @@ describe("caller view", () => {
     expect(root.textContent).toContain("Grandma is ready for a call");
   });
 });
+
+describe("call notices", () => {
+  const notice = () => root.querySelector<HTMLElement>(".notice");
+
+  it("shows Calling…, or Reconnecting… while the room connection is down", () => {
+    emit({ type: "calling", camera: new MediaStream() });
+    expect(notice()?.textContent).toBe("Calling…");
+
+    emit({ type: "connection", state: "reconnecting" });
+    expect(notice()?.textContent).toBe("Reconnecting…");
+  });
+
+  it("shows Connecting… until media flows, then nothing", () => {
+    emit({ type: "calling", camera: new MediaStream() });
+    emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+    expect(notice()?.textContent).toBe("Connecting…");
+    expect(notice()?.hidden).toBe(false);
+
+    emit({ type: "media", state: "connected" });
+
+    expect(notice()?.hidden).toBe(true);
+  });
+
+  it.each([
+    ["the media is interrupted", { type: "media", state: "interrupted" }],
+    ["the room connection drops", { type: "connection", state: "reconnecting" }],
+  ] as [string, CallerEvent][])("shows Reconnecting… when %s", (_, event) => {
+    emit({ type: "calling", camera: new MediaStream() });
+    emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+    emit({ type: "media", state: "connected" });
+
+    emit(event);
+
+    expect(notice()?.textContent).toBe("Reconnecting…");
+    expect(notice()?.hidden).toBe(false);
+  });
+
+  it("updates without rebuilding the videos (which would make them flash)", () => {
+    emit({ type: "calling", camera: new MediaStream() });
+    emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+    const before = [...root.querySelectorAll("video")];
+
+    emit({ type: "media", state: "connected" });
+    emit({ type: "media", state: "interrupted" });
+
+    const after = [...root.querySelectorAll("video")];
+    expect(after).toHaveLength(2);
+    expect(after.every((video, i) => video === before[i])).toBe(true);
+  });
+
+  it("starts each call as Connecting…", () => {
+    emit({ type: "calling", camera: new MediaStream() });
+    emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+    emit({ type: "media", state: "connected" });
+    emit({ type: "call-ended" });
+
+    emit({ type: "calling", camera: new MediaStream() });
+    emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+
+    expect(notice()?.textContent).toBe("Connecting…");
+  });
+});
