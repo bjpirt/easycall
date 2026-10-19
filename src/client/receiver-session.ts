@@ -25,7 +25,7 @@ export type ReceiverEvent =
   | { type: "connection"; state: "connected" | "reconnecting" };
 
 export interface ReceiverSession {
-  /** Leaves the room, which makes the receiver unavailable. */
+  /** Leaves the room on purpose (staff tapped End Call), so the receiver is unavailable straight away. */
   leave: () => void;
 }
 
@@ -42,6 +42,8 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
   return (onEvent) => {
     let ended = false;
     let teardown = (): void => undefined;
+    /** Tells the room we're leaving on purpose, once connected. */
+    let sayGoodbye = (): void => undefined;
 
     const end = (reason?: string): void => {
       if (ended) return;
@@ -131,6 +133,9 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
         },
       });
 
+      sayGoodbye = () => {
+        room.send({ type: "hangup" });
+      };
       teardown = () => {
         peer.close();
         stopCamera(camera);
@@ -141,6 +146,7 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
     void run();
     return {
       leave: () => {
+        sayGoodbye();
         end();
       },
     };

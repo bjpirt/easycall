@@ -198,6 +198,33 @@ describe("hangup", () => {
 
   it("from anyone else is ignored", () => {
     expect(receive(inCall, bob, { type: "hangup" })).toEqual({ state: inCall, effects: [] });
+    const replaced = { ...receiver, id: "old", page: "old" };
+    expect(receive(inCall, replaced, { type: "hangup" })).toEqual({ state: inCall, effects: [] });
+  });
+
+  it("from the waiting receiver makes them leave straight away", () => {
+    const waiting = room({ receiver: tablet, callers: callers(alice) });
+
+    const { state, effects } = receive(waiting, receiver, { type: "hangup" });
+
+    expect(state).toEqual(room({ callers: callers(alice) }));
+    expect(effects).toEqual([
+      close("r", "Left"),
+      statusTo("a", "unavailable"),
+      timer("ready", false),
+    ]);
+  });
+
+  it("from the receiver during a call ends it for the caller too", () => {
+    const { state, effects } = receive(inCall, receiver, { type: "hangup" });
+
+    expect(state).toEqual(room({ callers: callers(alice, bob) }));
+    expect(effects).toEqual([
+      close("r", "Left"),
+      sendTo("a", { type: "hangup" }),
+      statusTo("a", "unavailable"),
+      statusTo("b", "unavailable"),
+    ]);
   });
 });
 

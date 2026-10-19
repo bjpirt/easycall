@@ -49,13 +49,20 @@ You need:
 
 ## 3. Make the receiver available
 
-**Do:** On the receiver device, tap **Join Call**. Allow the camera and microphone if asked.
+**Do:**
+
+1. On the receiver device, tap **Join Call**. Allow the camera and microphone if asked.
+2. Tap **End Call**.
+3. Tap **Join Call** again.
 
 **Expect:**
 
-- The receiver device shows "Waiting for a call…" with its own camera in the corner.
-- Within a few seconds, Caller A shows "[Receiver] is ready for a call", and **Join Call** is
-  enabled.
+- After step 1, the receiver device shows "Waiting for a call…", with its own
+  camera in the corner and an **End Call** button. Within a few seconds, Caller A shows
+  "[Receiver] is ready for a call", and **Join Call** is enabled.
+- After step 2, the receiver device is back on the **Join Call** screen, with its camera off. Caller A shows "[Receiver] isn't available right now" within a few seconds.
+- After step 3, both are back as after step 1.
+- No "swipe to exit full screen" (or similar) notice appears at any point.
 
 ## 4. Make a call
 

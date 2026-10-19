@@ -4,7 +4,7 @@ import { mountReceiver } from "./receiver-view";
 
 let root: HTMLElement;
 const awake = { take: vi.fn(), release: vi.fn() };
-const fullscreen = vi.fn();
+const session = { leave: vi.fn() };
 let emit: ((event: ReceiverEvent) => void) | undefined;
 
 beforeEach(() => {
@@ -12,15 +12,14 @@ beforeEach(() => {
   emit = undefined;
   awake.take.mockClear().mockReturnValue(awake.release);
   awake.release.mockClear();
-  fullscreen.mockClear();
+  session.leave.mockClear();
   mountReceiver(
     root,
     (onEvent) => {
       emit = onEvent;
-      return { leave: vi.fn() };
+      return session;
     },
     awake.take,
-    fullscreen,
   );
 });
 
@@ -45,6 +44,23 @@ describe("receiver view", () => {
 
     expect(root.textContent).toContain("Waiting for a call…");
     expect(videos()).toEqual([["self-view", camera]]);
+  });
+
+  it("lets staff end waiting with End Call", () => {
+    join()({ type: "waiting", camera: new MediaStream() });
+
+    root.querySelector<HTMLButtonElement>("button.end-call")?.click();
+
+    expect(session.leave).toHaveBeenCalled();
+  });
+
+  it("has nothing to tap once someone's calling", () => {
+    const send = join();
+    send({ type: "waiting", camera: new MediaStream() });
+
+    send({ type: "incoming", name: "Ben" });
+
+    expect(root.querySelectorAll("button")).toHaveLength(0);
   });
 
   it("shows the caller full screen, with nothing to tap", () => {
@@ -112,14 +128,6 @@ describe("keeping the screen awake", () => {
 
     expect(awake.release).toHaveBeenCalledTimes(1);
   });
-});
-
-it("goes full screen when staff tap Join Call", () => {
-  expect(fullscreen).not.toHaveBeenCalled();
-
-  join();
-
-  expect(fullscreen).toHaveBeenCalledTimes(1);
 });
 
 describe("names", () => {

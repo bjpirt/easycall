@@ -123,7 +123,8 @@ export function receive(state: RoomState, from: Connection, message: Message): T
     }
 
     case "hangup":
-      return isActive ? endCall(state) : unchanged(state);
+      if (isActive) return endCall(state);
+      return isReceiver ? receiverLeaves(state) : unchanged(state);
 
     case "offer":
     case "answer":
@@ -183,6 +184,17 @@ export function expire(state: RoomState, timer: TimerName): Transition {
       // The caller didn't come back: the call is over.
       return state.active?.connection === null ? endCall(state) : unchanged(state);
   }
+}
+
+/**
+ * The receiver left on purpose (staff tapped End Call while waiting): they're
+ * gone straight away, rather than held as if their connection had dropped.
+ */
+function receiverLeaves(state: RoomState): Transition {
+  const effects: Effect[] = [];
+  if (state.receiver?.connection) effects.push(close(state.receiver.connection, "Left"));
+  if (state.active?.connection) effects.push(send(state.active.connection, { type: "hangup" }));
+  return finish(state, { ...state, receiver: null, active: null }, effects);
 }
 
 /**

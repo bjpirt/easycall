@@ -20,7 +20,11 @@ export type Status = (typeof statuses)[number];
 export type Message =
   /** Relayed between the receiver and the caller in the call. */
   | Signal
-  /** A deliberate end to the call, as opposed to a lost connection. */
+  /**
+   * A deliberate end, as opposed to a lost connection: from the caller in the
+   * call (ending it), from the receiver (leaving), or from the room (the other
+   * side ended it).
+   */
   | { type: "hangup" }
   /**
    * Room → anyone who connects, first. `resumed` means they've got their place

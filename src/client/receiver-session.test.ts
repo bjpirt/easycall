@@ -192,11 +192,12 @@ describe("receiver session", () => {
     expect(deps.connect).not.toHaveBeenCalled();
   });
 
-  it("leave() disconnects quietly and doesn't reconnect", async () => {
+  it("leave() tells the room, disconnects quietly and doesn't reconnect", async () => {
     const { session } = await start();
 
     session.leave();
 
+    expect(socket().sent()).toEqual([{ type: "hangup" }]);
     expect(socket().close).toHaveBeenCalled();
     expect(camera.stopped()).toBe(true);
     expect(events).toEqual([{ type: "ended" }]);
