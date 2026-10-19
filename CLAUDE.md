@@ -171,7 +171,7 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 
 #### E. Going live (rest)
 
-- [~] 20. Auto-deploy from `main` after CI passes
+- [x] 20. Auto-deploy from `main` after CI passes
 - [x] 21. Directory file: keep the directory in a local, gitignored `directory.json`; `npm run directory:push` validates it (same rules as the Worker) and uploads it as the `DIRECTORY` secret, printing the member emails to check against the Access policy (replaces the original "Access allow-list sync")
 
 #### F. Reliability
