@@ -236,11 +236,12 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 
 ## Cloudflare setup (done by the owner)
 
-- `npx wrangler login`, then `npm run deploy` (step 19).
-- **Sessions (step 15):** `npx wrangler secret put SESSION_SECRET` with a long random value (e.g. from `openssl rand -base64 32`). **Never set `DEV_LOGIN` in production.**
-- **Directory (step 13):** `npx wrangler secret put DIRECTORY`, then paste JSON with groups, display names and members (format under Directory above). Without it every group is a 404. App URLs are `https://easycall.ben-f23.workers.dev/<group>/`.
-- **Access login (step 17):** Zero Trust dashboard → Access → Applications → Add an application → **Self-hosted**. Destination: `easycall.ben-f23.workers.dev` with path `login` (only that path). Policy: Allow, Include → Emails → the members' emails (step 21 will sync this list automatically). Login method: One-time PIN. Then copy the application's **Audience (AUD) tag** and run `npx wrangler secret put ACCESS_AUD` (paste the tag) and `npx wrangler secret put ACCESS_TEAM_DOMAIN` (e.g. `myteam.cloudflareaccess.com`). Redeploy.
-- **TURN (step 22):** dashboard → Realtime (formerly Calls) → TURN → create a TURN key; copy the **Key ID** and **API token**. Then run `npx wrangler secret put TURN_KEY_ID` and `npx wrangler secret put TURN_KEY_API_TOKEN`, and redeploy. Check: signed in as a member, open `https://<app>/<group>/api/ice-servers`; it should list `turn:` URLs.
+The step-by-step guide lives in the **README ("Setting up on Cloudflare")**; keep it up to date there rather than duplicating it here. Things learned along the way:
+
+- **One-time PIN has to be enabled as an identity provider first** (Zero Trust → Integrations → Identity providers → add One-time PIN), or it isn't offered when creating the Access application.
+- **The AUD tag** is under the application's Configure → Additional settings ("Application Audience (AUD) Tag"; 64 hex characters). The dashboard URL holds the app _ID_ (a UUID), which is different.
+- The Access application must cover **only `/login`**, not the whole Worker.
+- Secrets: `SESSION_SECRET`, `ACCESS_TEAM_DOMAIN` (hostname only), `ACCESS_AUD`, `TURN_KEY_ID`, `TURN_KEY_API_TOKEN`, `DIRECTORY`. Never set `DEV_LOGIN` in production. Deploy only with `npm run deploy`.
 
 ## Environment notes
 
