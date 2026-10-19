@@ -66,6 +66,29 @@ describe("routing", () => {
   });
 });
 
+describe("security headers", () => {
+  it.each(["/", "/version", "/alpha/", "/nobody/api/me", "/no/such/page"])(
+    "are on %s",
+    async (path) => {
+      const response = await get(path);
+
+      expect(response.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
+      expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    },
+  );
+
+  it("let the home page's own inline style through, and only that", async () => {
+    const response = await get("/");
+    const nonce = /<style nonce="([^"]+)">/.exec(await response.text())?.[1];
+
+    expect(nonce).toBeDefined();
+    expect(response.headers.get("Content-Security-Policy")).toContain(
+      `style-src 'self' 'nonce-${nonce ?? ""}'`,
+    );
+    expect((await (await get("/")).text()).includes(`nonce="${nonce ?? ""}"`)).toBe(false); // fresh each time
+  });
+});
+
 describe("the home page", () => {
   it("explains easyCall to someone who isn't signed in, with a Sign in button", async () => {
     const response = await get("/");

@@ -20,7 +20,7 @@ const testDirectory = JSON.stringify({
 });
 
 /** The build version (see vite.config.ts), fixed for tests. */
-const define = { __APP_VERSION__: JSON.stringify("test-version") };
+const define = { __APP_VERSION__: JSON.stringify("test-version"), __DEV_SERVER__: "false" };
 
 export default defineConfig({
   test: {

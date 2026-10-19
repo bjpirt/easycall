@@ -45,8 +45,12 @@ export default defineConfig(({ command, isPreview }) => {
         persistState: !process.env.E2E,
       }),
     ],
-    // Baked into both the Worker and the page, so open pages can tell they're out of date.
-    define: { __APP_VERSION__: JSON.stringify(version()) },
+    define: {
+      // Baked into both the Worker and the page, so open pages can tell they're out of date.
+      __APP_VERSION__: JSON.stringify(version()),
+      // Only under `npm run dev`, whose CSS arrives as inline styles (see security-headers.ts).
+      __DEV_SERVER__: JSON.stringify(devServer),
+    },
     server: { port: 8787 },
   };
 });

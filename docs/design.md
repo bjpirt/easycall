@@ -105,6 +105,10 @@ or not the group exists, so nobody can find out which groups do. Once signed in,
 After signing in, `next` is resolved the way a browser would and only kept if it's on this site.
 Built assets and icons are served without running the Worker.
 
+Everything the Worker serves carries security headers: a strict Content-Security-Policy (only the
+app's own scripts, styles, images and connections; no framing), `nosniff`, `no-referrer` and a
+`Permissions-Policy` that only lets the app's own pages ask for the camera and microphone.
+
 ### Signing in
 
 Cloudflare Access guards only `/login`. Once through, the Worker issues **its own** session
