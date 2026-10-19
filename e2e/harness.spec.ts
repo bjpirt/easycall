@@ -5,7 +5,7 @@ test("serves the app at a group's URL, and 404s otherwise", async ({ group, rece
   expect(app?.status()).toBe(200);
   await expect(receiver.locator("#app")).toBeAttached();
 
-  for (const path of ["/", "/no-such-group/"]) {
+  for (const path of ["/no-such-group/", "/no-such-group/api/me"]) {
     expect((await receiver.goto(path))?.status()).toBe(404);
   }
 });

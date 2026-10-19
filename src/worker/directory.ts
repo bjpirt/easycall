@@ -17,6 +17,8 @@ export interface Directory {
   group: (slug: string) => Group | undefined;
   /** A user's membership of a group, or `undefined` if they aren't a member. Emails are case-insensitive. */
   member: (slug: string, email: string) => Member | undefined;
+  /** The group a user is in (each person is in at most one), or `undefined` if none. */
+  groupOf: (email: string) => Group | undefined;
   /** Every member's email, across all groups (e.g. to check the Access policy allows them). */
   emails: () => string[];
 }
@@ -35,9 +37,10 @@ interface GroupEntry extends Group {
  *     "tablet@example.com": {"role": "receiver", "name": "Grandma"},
  *     "ben@example.com": {"role": "admin", "name": "Ben"} }}}}
  *
- * Every member needs a role and a name; invalid members are skipped. Every group
- * needs exactly one receiver (whose name is what callers see); other invalid
- * groups are skipped entirely. A missing or unreadable directory is empty, so
+ * Every member needs a role and a name; invalid members are skipped. Each person
+ * can only be in one group: if they're listed again in a later group, that entry
+ * is skipped. Every group needs exactly one receiver (whose name is what callers
+ * see); other invalid groups are skipped entirely. A missing or unreadable directory is empty, so
  * nothing is accessible. Each problem is reported to `onProblem` (logged by default).
  */
 export function parseDirectory(
@@ -47,16 +50,22 @@ export function parseDirectory(
   },
 ): Directory {
   const groups = new Map<string, GroupEntry>();
+  /** Which group each email is in. */
+  const groupOf = new Map<string, string>();
   for (const [slug, value] of Object.entries(readGroups(json, onProblem))) {
-    const group = parseGroup(slug, value, onProblem);
-    if (group) groups.set(slug, group);
+    const group = parseGroup(slug, value, groupOf, onProblem);
+    if (!group) continue;
+    groups.set(slug, group);
+    for (const email of group.members.keys()) groupOf.set(email, slug);
   }
+  const group = (slug: string | undefined): Group | undefined => {
+    const entry = slug === undefined ? undefined : groups.get(slug);
+    return entry && { slug: entry.slug, receiverName: entry.receiverName };
+  };
   return {
-    group: (slug) => {
-      const entry = groups.get(slug);
-      return entry && { slug: entry.slug, receiverName: entry.receiverName };
-    },
+    group,
     member: (slug, email) => groups.get(slug)?.members.get(normaliseEmail(email)),
+    groupOf: (email) => group(groupOf.get(normaliseEmail(email))),
     emails: () => [...new Set([...groups.values()].flatMap((g) => [...g.members.keys()]))].sort(),
   };
 }
@@ -71,6 +80,8 @@ export function directoryProblems(json: string): string[] {
 function parseGroup(
   slug: string,
   value: unknown,
+  /** Emails already in an earlier group, and which. */
+  taken: ReadonlyMap<string, string>,
   onProblem: (problem: string) => void,
 ): GroupEntry | undefined {
   if (!slugPattern.test(slug)) {
@@ -82,9 +93,12 @@ function parseGroup(
   const { members: raw } = (value ?? {}) as { members?: unknown };
   for (const [email, entry] of Object.entries(isRecord(raw) ? raw : {})) {
     const member = parseMember(entry);
+    const other = taken.get(normaliseEmail(email));
     if (!email.includes("@")) onProblem(`group "${slug}": "${email}" isn't an email address`);
     else if (!member) {
       onProblem(`group "${slug}": ${email} needs a role (receiver, caller or admin) and a name`);
+    } else if (other) {
+      onProblem(`group "${slug}": ${email} is already in group "${other}" (one group per person)`);
     } else members.set(normaliseEmail(email), member);
   }
 

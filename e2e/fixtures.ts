@@ -5,8 +5,8 @@ import {
   e2eGroupName,
   e2eSessionSecret,
   graceSeconds,
+  e2eUsers,
   groupsPerWorker,
-  users,
 } from "./config";
 
 /** When each of this worker's groups was last used (each worker is its own process). */
@@ -15,6 +15,8 @@ const lastUsed = new Map<string, number>();
 interface Fixtures {
   /** This test's group: never shared with a concurrent test, nor reused within the grace period. */
   group: string;
+  /** The group's members' emails. */
+  users: ReturnType<typeof e2eUsers>;
   /** Pages signed in as the group's receiver, a caller and another caller. */
   receiver: Page;
   caller: Page;
@@ -22,12 +24,12 @@ interface Fixtures {
 }
 
 /**
- * A page in its own browser context (like a separate device), signed in as
- * `email`, with camera and mic allowed.
+ * A page in its own browser context (like a separate device), signed in as the
+ * group's `who`, with camera and mic allowed.
  */
-function signedInPage(email: string) {
+function signedInPage(who: keyof ReturnType<typeof e2eUsers>) {
   return async (
-    { browser }: { browser: Browser },
+    { browser, users }: { browser: Browser; users: ReturnType<typeof e2eUsers> },
     use: (page: Page) => Promise<void>,
   ): Promise<void> => {
     const context = await browser.newContext({ baseURL, permissions: ["camera", "microphone"] });
@@ -43,7 +45,7 @@ function signedInPage(email: string) {
       };
     });
     const page = await context.newPage();
-    await signIn(page, email);
+    await signIn(page, users[who]);
     await use(page);
     await context.close();
   };
@@ -63,9 +65,12 @@ export const test = base.extend<Fixtures>({
     await use(group);
     lastUsed.set(group, Date.now());
   },
-  receiver: signedInPage(users.receiver),
-  caller: signedInPage(users.caller),
-  otherCaller: signedInPage(users.otherCaller),
+  users: async ({ group }, use) => {
+    await use(e2eUsers(group));
+  },
+  receiver: signedInPage("receiver"),
+  caller: signedInPage("caller"),
+  otherCaller: signedInPage("otherCaller"),
 });
 
 /** Signs a page's browser context in as `email`, as if they'd been through the login. */
@@ -86,5 +91,4 @@ export async function dropConnection(page: Page): Promise<void> {
   });
 }
 
-export { users } from "./config";
 export { expect } from "@playwright/test";

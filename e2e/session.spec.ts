@@ -1,6 +1,6 @@
-import { expect, signIn, test, users } from "./fixtures";
+import { expect, signIn, test } from "./fixtures";
 
-test("a signed-in member can ask who they are in the group", async ({ group, caller }) => {
+test("a signed-in member can ask who they are in the group", async ({ group, users, caller }) => {
   await signIn(caller, users.admin);
 
   const response = await caller.request.get(`/${group}/api/me`);
@@ -21,7 +21,7 @@ test("who-am-I needs a session", async ({ group, caller }) => {
 });
 
 test("dev login is switched off in the built app", async ({ caller }) => {
-  expect((await caller.request.get("/dev-login?email=admin@e2e.test")).status()).toBe(404);
+  expect((await caller.request.get("/dev-login?email=stranger@e2e.test")).status()).toBe(404);
 });
 
 test("each person sees the view for their role", async ({ group, receiver, caller }) => {

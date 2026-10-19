@@ -85,11 +85,24 @@ describe("parseDirectory", () => {
       expect(directory.member("smith", " TABLET@example.COM ")?.role).toBe("receiver");
     });
 
-    it("lets someone have a different role and name in each group", () => {
-      expect(directory.member("jones", "ben@example.com")).toEqual({
-        role: "caller",
-        name: "Uncle Ben",
+    it("keeps someone in their first group only", () => {
+      expect(directory.member("jones", "ben@example.com")).toBeUndefined();
+      expect(directory.member("jones", "pad@x.com")).toEqual(receiver("Dad"));
+    });
+
+    it("finds the group someone is in", () => {
+      expect(directory.groupOf("BEN@example.com")).toEqual({
+        slug: "smith",
+        receiverName: "Grandma",
       });
+      expect(directory.groupOf("pad@x.com")).toEqual({ slug: "jones", receiverName: "Dad" });
+    });
+
+    it.each([
+      ["a non-member", "stranger@example.com"],
+      ["a skipped member", "bad@example.com"],
+    ])("finds no group for %s", (_, email) => {
+      expect(directory.groupOf(email)).toBeUndefined();
     });
 
     it.each([
@@ -108,17 +121,17 @@ describe("parseDirectory", () => {
 });
 
 describe("emails", () => {
-  it("lists every member once, normalised and sorted", () => {
+  it("lists every member, normalised and sorted", () => {
     const directory = directoryOf({
       smith: {
         members: { "Zed@x.com": receiver(), "amy@x.com": { role: "admin", name: "Amy" } },
       },
       jones: {
-        members: { "t@x.com": receiver("Dad"), "amy@x.com": { role: "caller", name: "Amy" } },
+        members: { "t@x.com": receiver("Dad"), "bob@x.com": { role: "caller", name: "Bob" } },
       },
     });
 
-    expect(directory.emails()).toEqual(["amy@x.com", "t@x.com", "zed@x.com"]);
+    expect(directory.emails()).toEqual(["amy@x.com", "bob@x.com", "t@x.com", "zed@x.com"]);
   });
 });
 
@@ -145,6 +158,8 @@ describe("directoryProblems", () => {
             "r2@x.com": receiver("Two"),
           },
         },
+        jones: { members: { "t@x.com": receiver("Dad") } },
+        brown: { members: { "T@x.com": { role: "caller", name: "T" }, "p@x.com": receiver() } },
       },
     });
 
@@ -155,6 +170,7 @@ describe("directoryProblems", () => {
       'group "smith": a@x.com needs a role (receiver, caller or admin) and a name',
       'group "smith": b@x.com needs a role (receiver, caller or admin) and a name',
       'group "smith" needs exactly one receiver (it has 2)',
+      'group "brown": T@x.com is already in group "jones" (one group per person)',
     ]);
   });
 

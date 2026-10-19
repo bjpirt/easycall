@@ -34,7 +34,7 @@ npm run dev
 
 To make a call locally, use two browser profiles (or a normal and a private window). Sign in
 at <http://localhost:8787/dev-login> as `receiver@example.com` in one and `caller@example.com` in
-the other, then open <http://localhost:8787/dev/> in both.
+the other, then open <http://localhost:8787/> in both (it takes you to the `dev` group).
 
 ## Setting up on Cloudflare
 

@@ -11,12 +11,15 @@ export const baseURL = `http://localhost:${String(port)}`;
  */
 export const e2eSessionSecret = process.env.E2E_SESSION_SECRET ?? "";
 
-export const users = {
-  receiver: "receiver@e2e.test",
-  caller: "caller@e2e.test",
-  otherCaller: "other-caller@e2e.test",
-  admin: "admin@e2e.test",
-} as const;
+/** A group's members' emails: their own for each group, since each person is in one group. */
+export function e2eUsers(group: string) {
+  return {
+    receiver: `receiver@${group}.e2e.test`,
+    caller: `caller@${group}.e2e.test`,
+    otherCaller: `other-caller@${group}.e2e.test`,
+    admin: `admin@${group}.e2e.test`,
+  } as const;
+}
 
 /** The test server's grace period for dropped connections (short, so expiry can be tested). */
 export const graceSeconds = 3;
@@ -37,12 +40,15 @@ export const e2eGroups = Array.from({ length: maxWorkers }, (_, worker) =>
   Array.from({ length: groupsPerWorker }, (_, index) => e2eGroupName(worker, index)),
 ).flat();
 
-/** Every E2E group has the same members (the receiver's name is what callers see). */
-export const e2eGroup = {
-  members: {
-    [users.receiver]: { role: "receiver", name: "Grandma" },
-    [users.caller]: { role: "caller", name: "Ben" },
-    [users.otherCaller]: { role: "caller", name: "Sarah" },
-    [users.admin]: { role: "admin", name: "Ada" },
-  },
-};
+/** Every E2E group has the same names (the receiver's name is what callers see). */
+export function e2eGroup(group: string) {
+  const users = e2eUsers(group);
+  return {
+    members: {
+      [users.receiver]: { role: "receiver", name: "Grandma" },
+      [users.caller]: { role: "caller", name: "Ben" },
+      [users.otherCaller]: { role: "caller", name: "Sarah" },
+      [users.admin]: { role: "admin", name: "Ada" },
+    },
+  };
+}

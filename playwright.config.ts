@@ -35,8 +35,8 @@ export default defineConfig({
   ],
   webServer: {
     command: `npm run build && npx vite preview --port ${String(port)} --strictPort`,
-    // Ready once the Worker answers: a 401 (no session) counts as up. Pages redirect
-    // to /login, and the root is deliberately a 404.
+    // Ready once the Worker answers: a 401 (no session) counts as up (pages redirect
+    // to /login instead).
     url: `${baseURL}/${e2eGroups[0] ?? ""}/api/me`,
     reuseExistingServer: !process.env.CI,
     env: {
@@ -46,7 +46,7 @@ export default defineConfig({
       GRACE_SECONDS: String(graceSeconds),
       // A few groups per parallel worker (see e2e/fixtures.ts), so tests don't share rooms.
       DIRECTORY: JSON.stringify({
-        groups: Object.fromEntries(e2eGroups.map((g) => [g, e2eGroup])),
+        groups: Object.fromEntries(e2eGroups.map((g) => [g, e2eGroup(g)])),
       }),
       SESSION_SECRET: e2eSessionSecret,
     },

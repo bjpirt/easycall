@@ -1,3 +1,4 @@
+import { escapeHtml } from "./html";
 import { safePath } from "./safe-path";
 import { sessionCookie } from "./session";
 
@@ -21,13 +22,12 @@ export async function devLogin(request: Request, secret: string | undefined): Pr
 }
 
 function form(next: string): Response {
-  const escaped = next.replace(/[&"<>]/g, (c) => `&#${String(c.charCodeAt(0))};`);
   return new Response(
     `<!doctype html><title>Dev login</title>
 <form>
   <h1>Dev login</h1>
   <p><label>Email <input name="email" type="email" required autofocus></label></p>
-  <p><label>Then go to <input name="next" value="${escaped}"></label></p>
+  <p><label>Then go to <input name="next" value="${escapeHtml(next)}"></label></p>
   <button>Sign in</button>
 </form>`,
     { headers: { "Content-Type": "text/html; charset=utf-8" } },

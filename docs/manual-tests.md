@@ -24,12 +24,13 @@ You need:
 
 ## 1. Sign in as a caller
 
-**Do:** On Caller A, open the group URL.
+**Do:** On Caller A, open the app's home page, `https://<your-app>/`, and tap **Sign in**.
 
 **Expect:**
 
-- You're asked for your email, then for a code sent to it. After entering the code, you're back on
-  the group's page.
+- The home page explains what easyCall is, with a big **Sign in** button.
+- You're asked for your email, then for a code sent to it. After entering the code, you're taken
+  straight to the group's page.
 - It shows "[Receiver] isn't available right now", a greyed-out **Join call** button, and "Signed
   in as [Caller A]".
 

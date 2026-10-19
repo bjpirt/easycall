@@ -13,7 +13,7 @@ const testDirectory = JSON.stringify({
     beta: {
       members: {
         "beta-receiver@example.com": { role: "receiver", name: "Beta" },
-        "caller@example.com": { role: "caller", name: "Cal" },
+        "beta-caller@example.com": { role: "caller", name: "Bea" },
       },
     },
   },

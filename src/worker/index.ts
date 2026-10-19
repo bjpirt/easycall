@@ -2,6 +2,7 @@ import type { MemberRole } from "../shared/roles";
 import { roomRole } from "../shared/roles";
 import { devLogin } from "./dev-login";
 import { parseDirectory, type Directory, type Group } from "./directory";
+import { homePage } from "./home";
 import { login } from "./login";
 import { manifest } from "./manifest";
 import { readSession, sessionCookie } from "./session";
@@ -12,6 +13,7 @@ export { Room } from "./room";
 
 /**
  * Routes:
+ *   /                          the home page, or your group's page if you're signed in
  *   /version                   the deployed app version (public), so open pages can update
  *   /login                     sign in (guarded by Cloudflare Access)
  *   /dev-login                 local sign-in (only when DEV_LOGIN=true)
@@ -37,8 +39,18 @@ export default {
       return devLogin(request, env.SESSION_SECRET);
     }
 
-    const [, slug, rest] = /^\/([^/]+)(\/.*)?$/.exec(url.pathname) ?? [];
     const directory = parseDirectory(env.DIRECTORY);
+    if (url.pathname === "/") {
+      // Signed in: straight to your group. Otherwise, what easyCall is and how to sign in.
+      const email = await readSession(request, env.SESSION_SECRET);
+      const home = email ? directory.groupOf(email) : undefined;
+      if (home) return Response.redirect(new URL(`/${home.slug}/`, url).toString(), 302);
+      return new Response(homePage(email), {
+        headers: { ...noStore, "Content-Type": "text/html; charset=utf-8" },
+      });
+    }
+
+    const [, slug, rest] = /^\/([^/]+)(\/.*)?$/.exec(url.pathname) ?? [];
     const group = slug ? directory.group(slug) : undefined;
     if (!group) return notFound();
     if (rest === undefined) {

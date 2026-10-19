@@ -7,7 +7,7 @@ import { sessionToken } from "./session";
 
 // The test directory (vitest.config.ts) has groups "alpha" (receiver@ "Alpha",
 // caller@ "Cal" and admin@example.com "Ada") and "beta" (beta-receiver@ "Beta" and
-// caller@ "Cal"), and SESSION_SECRET "test-secret".
+// beta-caller@ "Bea"), and SESSION_SECRET "test-secret".
 // Built assets aren't available here, so serving the page is covered by E2E.
 
 function withHeader(init: RequestInit, name: string, value: string): RequestInit {
@@ -54,7 +54,7 @@ describe("routing", () => {
     expect(response.headers.get("Location")).toBe("http://example.com/alpha/?x=1");
   });
 
-  it.each(["/", "/nobody/", "/nobody/api/room", "/Alpha/", "/api/room", "/api/ice-servers"])(
+  it.each(["/nobody/", "/nobody/api/room", "/Alpha/", "/api/room", "/api/ice-servers"])(
     "returns 404 for %s",
     async (path) => {
       expect((await get(path, await as("admin@example.com"))).status).toBe(404);
@@ -63,6 +63,44 @@ describe("routing", () => {
 
   it("returns 404 for unknown paths in a group, even for members", async () => {
     expect((await get("/alpha/elsewhere", await as("admin@example.com"))).status).toBe(404);
+  });
+});
+
+describe("the home page", () => {
+  it("explains easyCall to someone who isn't signed in, with a Sign in button", async () => {
+    const response = await get("/");
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(html).toContain("video call");
+    expect(html).toContain('<a class="button" href="/login">Sign in</a>');
+  });
+
+  it.each([
+    ["receiver@example.com", "/alpha/"],
+    ["Admin@Example.com", "/alpha/"],
+    ["beta-caller@example.com", "/beta/"],
+  ])("sends %s, once signed in, to their group", async (email, path) => {
+    const response = await get("/", await as(email));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe(`http://example.com${path}`);
+  });
+
+  it("tells someone signed in who isn't in a group, without a Sign in button", async () => {
+    const html = await (await get("/", await as("stranger@example.com"))).text();
+
+    expect(html).toContain("You're signed in as stranger@example.com");
+    expect(html).not.toContain('href="/login"');
+  });
+
+  it("ignores a forged session", async () => {
+    const response = await get("/", { headers: { Cookie: "session=forged.token" } });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('href="/login"');
   });
 });
 
@@ -160,7 +198,7 @@ describe("/<group>/api/room", () => {
   });
 
   it("keeps each group's room separate", async () => {
-    const caller = await connect("/beta/api/room", await as("caller@example.com"));
+    const caller = await connect("/beta/api/room", await as("beta-caller@example.com"));
     await vi.waitFor(() => {
       expect(caller.messages).toEqual([
         { type: "welcome", resumed: false, version: "test-version" },
