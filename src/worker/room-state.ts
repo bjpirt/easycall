@@ -74,7 +74,7 @@ export function status(state: RoomState): Status {
 export function connect(state: RoomState, { id, role, email, name, page }: Connection): Transition {
   if (role === "caller") {
     // Only the same page gets its place back. Another page (e.g. the app reopened)
-    // can rejoin the call with Join call instead.
+    // can rejoin the call with Join Call instead.
     const away = state.active?.connection === null ? state.active : null;
     const resumes = away?.email === email && away.page === page;
     const active = resumes ? { ...away, connection: id } : state.active;

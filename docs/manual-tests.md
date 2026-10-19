@@ -31,7 +31,7 @@ You need:
 - The home page explains what easyCall is, with a big **Sign in** button.
 - You're asked for your email, then for a code sent to it. After entering the code, you're taken
   straight to the group's page.
-- It shows "[Receiver] isn't available right now", a greyed-out **Join call** button, and "Signed
+- It shows "[Receiver] isn't available right now", a greyed-out **Join Call** button, and "Signed
   in as [Caller A]".
 
 ## 2. Set up the receiver device
@@ -44,27 +44,27 @@ You need:
 
 **Expect:**
 
-- After signing in, the screen shows only a large **Join call** button.
+- After signing in, the screen shows only a large **Join Call** button.
 - The installed app opens full screen, with no address bar.
 
 ## 3. Make the receiver available
 
-**Do:** On the receiver device, tap **Join call**. Allow the camera and microphone if asked.
+**Do:** On the receiver device, tap **Join Call**. Allow the camera and microphone if asked.
 
 **Expect:**
 
 - The receiver device shows "Waiting for a call…" with its own camera in the corner.
-- Within a few seconds, Caller A shows "[Receiver] is ready for a call", and **Join call** is
+- Within a few seconds, Caller A shows "[Receiver] is ready for a call", and **Join Call** is
   enabled.
 
 ## 4. Make a call
 
-**Do:** On Caller A, tap **Join call**. Allow the camera and microphone if asked.
+**Do:** On Caller A, tap **Join Call**. Allow the camera and microphone if asked.
 
 **Expect:**
 
 - Caller A shows "Calling…", then the receiver's video full screen, labelled "[Receiver]", with its
-  own camera in the corner and a **Hang up** button.
+  own camera in the corner and an **End Call** button.
 - The receiver device shows "[Caller A] is calling…", then Caller A's video full screen, labelled
   "[Caller A]". It has nothing to tap.
 - Video and sound work both ways within about 10 seconds. "Connecting…" disappears once
@@ -74,7 +74,7 @@ You need:
 
 **Do:** Sign in on Caller B and open the group URL.
 
-**Expect:** Caller B shows "[Receiver] is in a call with [Caller A]", and **Join call** is greyed
+**Expect:** Caller B shows "[Receiver] is in a call with [Caller A]", and **Join Call** is greyed
 out.
 
 ## 6. The screen stays on
@@ -97,30 +97,30 @@ sound come back by themselves. Nobody has to tap anything.
 ## 8. Recover when the receiver's app is reopened
 
 **Do:** On the receiver device, close the app (or press Home), open it again within 30 seconds,
-and tap **Join call**.
+and tap **Join Call**.
 
 **Expect:** The call comes back by itself within about 15 seconds, without Caller A doing
 anything.
 
 ## 9. Reopen the app during a call
 
-**Do:** On Caller A, close the app or browser tab without hanging up, open the group URL again
-within 30 seconds, and tap **Join call**.
+**Do:** On Caller A, close the app or browser tab without tapping **End Call**, open the group URL again
+within 30 seconds, and tap **Re-join Call**.
 
 **Expect:**
 
-- After reopening, Caller A shows "Your call with [Receiver] is still going", with **Join call**
+- After reopening, Caller A shows "Your call with [Receiver] is still going", with **Re-join Call**
   enabled.
 - After tapping it, the call comes back on both devices within about 15 seconds. The receiver
   device doesn't go back to "The call has ended."
 
-## 10. Hang up
+## 10. End the call
 
-**Do:** On Caller A, tap **Hang up**.
+**Do:** On Caller A, tap **End Call**.
 
 **Expect:**
 
-- The receiver device shows "The call has ended." with the **Join call** button, and its camera is
+- The receiver device shows "The call has ended." with the **Join Call** button, and its camera is
   off.
 - Caller A goes back to its starting screen, and shows "[Receiver] isn't available right now".
 - Caller B also shows "[Receiver] isn't available right now".
@@ -129,21 +129,21 @@ within 30 seconds, and tap **Join call**.
 
 **Do:**
 
-1. On the receiver device, tap **Join call**.
-2. On Caller B, tap **Join call** and wait until the call is connected.
-3. Close the app or browser on Caller B, without hanging up.
+1. On the receiver device, tap **Join Call**.
+2. On Caller B, tap **Join Call** and wait until the call is connected.
+3. Close the app or browser on Caller B, without tapping **End Call**.
 
 **Expect:** About 30 seconds later, the receiver device shows "The call has ended." with the
-**Join call** button.
+**Join Call** button.
 
 ## 12. Nobody calls
 
-**Do:** On the receiver device, tap **Join call**, and let nobody call for 30 minutes (the ready
+**Do:** On the receiver device, tap **Join Call**, and let nobody call for 30 minutes (the ready
 window).
 
 **Expect:**
 
-- The receiver device shows "No calls just now." with the **Join call** button, and its camera is
+- The receiver device shows "No calls just now." with the **Join Call** button, and its camera is
   off.
 - Callers show "[Receiver] isn't available right now".
 - Afterwards, the receiver device's screen dims and sleeps as normal.

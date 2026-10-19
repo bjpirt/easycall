@@ -4,7 +4,7 @@ A minimal video-calling app for someone who can't use ordinary video-call apps,
 for example a relative in a care home.
 
 The person being called (the _receiver_) has a tablet that needs no interaction
-during a call. A member of staff opens the app and taps **Join call**. Family
+during a call. A member of staff opens the app and taps **Join Call**. Family
 members in the group can see the receiver is available, and the first one to join is connected
 straight away; the receiver never has to answer. When the call ends, or if
 nobody calls for a while, the tablet goes back to its idle screen.

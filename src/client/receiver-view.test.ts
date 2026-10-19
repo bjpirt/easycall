@@ -33,8 +33,8 @@ function join(): (event: ReceiverEvent) => void {
 const videos = () => [...root.querySelectorAll("video")].map((v) => [v.className, v.srcObject]);
 
 describe("receiver view", () => {
-  it("starts idle with a Join call button", () => {
-    expect(root.querySelector("button")?.textContent).toBe("Join call");
+  it("starts idle with a Join Call button", () => {
+    expect(root.querySelector("button")?.textContent).toBe("Join Call");
     expect(emit).toBeUndefined();
   });
 
@@ -65,7 +65,7 @@ describe("receiver view", () => {
   it("returns to idle with the reason when the session ends", () => {
     join()({ type: "ended", reason: "Lost connection." });
 
-    expect(root.querySelector("button")?.textContent).toBe("Join call");
+    expect(root.querySelector("button")?.textContent).toBe("Join Call");
     expect(root.textContent).toContain("Lost connection.");
   });
 });
@@ -114,7 +114,7 @@ describe("keeping the screen awake", () => {
   });
 });
 
-it("goes full screen when staff tap Join call", () => {
+it("goes full screen when staff tap Join Call", () => {
   expect(fullscreen).not.toHaveBeenCalled();
 
   join();

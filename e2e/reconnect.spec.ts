@@ -9,9 +9,9 @@ async function expectPlaying(video: Locator, timeout?: number): Promise<void> {
 
 async function startCall(group: string, receiver: Page, caller: Page): Promise<void> {
   await receiver.goto(`/${group}/`);
-  await receiver.getByRole("button", { name: "Join call" }).click();
+  await receiver.getByRole("button", { name: "Join Call" }).click();
   await caller.goto(`/${group}/`);
-  await caller.getByRole("button", { name: "Join call" }).click();
+  await caller.getByRole("button", { name: "Join Call" }).click();
   await expectPlaying(caller.locator("video.remote-view"));
   await expectPlaying(receiver.locator("video.remote-view"));
 }
@@ -31,8 +31,8 @@ test("the caller's connection drops and comes back: the call carries on", async 
   await expect(caller.getByText("Reconnecting…")).toBeVisible();
   await expect(caller.locator(".notice")).toBeHidden();
 
-  // Reconnected with its place in the call kept: still connected, and Hang up still works.
-  await expect(caller.getByRole("button", { name: "Hang up" })).toBeVisible();
+  // Reconnected with its place in the call kept: still connected, and End Call still works.
+  await expect(caller.getByRole("button", { name: "End Call" })).toBeVisible();
   await expectPlaying(caller.locator("video.remote-view"));
   await expect(receiver.getByText("The call has ended.")).toHaveCount(0);
   await expect
@@ -41,7 +41,7 @@ test("the caller's connection drops and comes back: the call carries on", async 
     )
     .toBe(2);
 
-  await caller.getByRole("button", { name: "Hang up" }).click();
+  await caller.getByRole("button", { name: "End Call" }).click();
   await expect(receiver.getByText("The call has ended.")).toBeVisible();
 });
 
@@ -61,7 +61,7 @@ test("the receiver's connection drops and comes back: the call carries on", asyn
     .toBe(2);
   await expectPlaying(receiver.locator("video.remote-view"));
   await expect(caller.getByText("The call has ended.")).toHaveCount(0);
-  await expect(caller.getByRole("button", { name: "Hang up" })).toBeVisible();
+  await expect(caller.getByRole("button", { name: "End Call" })).toBeVisible();
 });
 
 test("if the caller doesn't come back, the call ends after the grace period", async ({
@@ -87,11 +87,11 @@ test("the tablet reloads mid-call: staff rejoin and the call recovers by itself"
 
   // Within the grace period, so the room keeps the tablet's place in the call.
   await receiver.reload();
-  await receiver.getByRole("button", { name: "Join call" }).click();
+  await receiver.getByRole("button", { name: "Join Call" }).click();
 
   // The caller's connection to the old page breaks; it restarts ICE and the new page answers.
   await expectPlaying(receiver.locator("video.remote-view"), 30_000);
-  await expect(caller.getByRole("button", { name: "Hang up" })).toBeVisible();
+  await expect(caller.getByRole("button", { name: "End Call" })).toBeVisible();
   await expect(caller.getByText("The call has ended.")).toHaveCount(0);
 });
 
@@ -105,9 +105,9 @@ test("the caller closes the app mid-call and reopens it: they can rejoin the cal
   await caller.reload(); // a new page, as when the app is closed and opened again
 
   await expect(caller.getByText("Your call with Grandma is still going")).toBeVisible();
-  await caller.getByRole("button", { name: "Join call" }).click();
+  await caller.getByRole("button", { name: "Re-join Call" }).click();
 
-  await expect(caller.getByRole("button", { name: "Hang up" })).toBeVisible();
+  await expect(caller.getByRole("button", { name: "End Call" })).toBeVisible();
   await expectPlaying(caller.locator("video.remote-view"));
   await expectPlaying(receiver.locator("video.remote-view"));
   await expect(caller.locator(".notice")).toBeHidden({ timeout: 10_000 });
@@ -115,7 +115,7 @@ test("the caller closes the app mid-call and reopens it: they can rejoin the cal
   // Still in the call after the grace period for the old page has passed.
   await caller.waitForTimeout(4000);
   await expect(receiver.getByText("The call has ended.")).toHaveCount(0);
-  await expect(caller.getByRole("button", { name: "Hang up" })).toBeVisible();
+  await expect(caller.getByRole("button", { name: "End Call" })).toBeVisible();
 });
 
 test("the caller's other device can't take over their call", async ({
@@ -133,7 +133,7 @@ test("the caller's other device can't take over their call", async ({
 
   await dropConnection(caller); // the call's device reconnects, and keeps its place
 
-  await expect(caller.getByRole("button", { name: "Hang up" })).toBeVisible();
+  await expect(caller.getByRole("button", { name: "End Call" })).toBeVisible();
   await expect(caller.getByText("The call has ended.")).toHaveCount(0);
   await expect
     .poll(() =>
@@ -141,5 +141,5 @@ test("the caller's other device can't take over their call", async ({
     )
     .toBe(2);
   await expectPlaying(caller.locator("video.remote-view"));
-  await expect(otherDevice.getByRole("button", { name: "Join call" })).toBeDisabled();
+  await expect(otherDevice.getByRole("button", { name: "Join Call" })).toBeDisabled();
 });

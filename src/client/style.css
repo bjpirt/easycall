@@ -44,7 +44,7 @@ body {
   border-radius: 0.5rem;
 }
 
-.call .hang-up {
+.call .end-call {
   position: fixed;
   bottom: 1rem;
   left: 50%;

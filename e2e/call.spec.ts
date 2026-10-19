@@ -8,7 +8,7 @@ async function expectPlaying(video: Locator): Promise<void> {
 
 async function join(page: Page, group: string): Promise<void> {
   await page.goto(`/${group}/`);
-  await page.getByRole("button", { name: "Join call" }).click();
+  await page.getByRole("button", { name: "Join Call" }).click();
 }
 
 async function expectConnected(receiver: Page, caller: Page): Promise<void> {
@@ -46,18 +46,18 @@ test("caller hangs up: receiver shows the call has ended, staff can rejoin", asy
   await join(caller, group);
   await expectConnected(receiver, caller);
 
-  await caller.getByRole("button", { name: "Hang up" }).click();
+  await caller.getByRole("button", { name: "End Call" }).click();
 
   // The receiver goes back to idle with a message; the camera is off.
   await expect(receiver.getByText("The call has ended.")).toBeVisible();
-  await expect(receiver.getByRole("button", { name: "Join call" })).toBeVisible();
+  await expect(receiver.getByRole("button", { name: "Join Call" })).toBeVisible();
   await expect(receiver.locator("video")).toHaveCount(0);
   // The caller goes quietly back to idle and sees the receiver is unavailable.
   await expect(caller.getByText("Grandma isn't available right now")).toBeVisible();
   await expect(caller.locator("video")).toHaveCount(0);
 
-  // Staff tap Join call to make the receiver available again.
-  await receiver.getByRole("button", { name: "Join call" }).click();
-  await caller.getByRole("button", { name: "Join call" }).click();
+  // Staff tap Join Call to make the receiver available again.
+  await receiver.getByRole("button", { name: "Join Call" }).click();
+  await caller.getByRole("button", { name: "Join Call" }).click();
   await expectConnected(receiver, caller);
 });

@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures";
 
-test("the tablet keeps its screen awake from Join call until it's back to idle", async ({
+test("the tablet keeps its screen awake from Join Call until it's back to idle", async ({
   group,
   receiver,
   caller,
@@ -30,14 +30,14 @@ test("the tablet keeps its screen awake from Join call until it's back to idle",
   await receiver.goto(`/${group}/`);
   expect(await wakeLog()).toEqual([]); // idle: the screen may sleep
 
-  await receiver.getByRole("button", { name: "Join call" }).click();
+  await receiver.getByRole("button", { name: "Join Call" }).click();
   await expect.poll(wakeLog).toEqual(["request screen"]);
 
   // A call comes in and ends: back to idle, so the lock is released.
   await caller.goto(`/${group}/`);
-  await caller.getByRole("button", { name: "Join call" }).click();
+  await caller.getByRole("button", { name: "Join Call" }).click();
   await expect(receiver.locator("video.remote-view")).toBeVisible();
-  await caller.getByRole("button", { name: "Hang up" }).click();
+  await caller.getByRole("button", { name: "End Call" }).click();
   await expect(receiver.getByText("The call has ended.")).toBeVisible();
 
   await expect.poll(wakeLog).toEqual(["request screen", "release"]);

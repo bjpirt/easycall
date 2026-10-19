@@ -7,16 +7,16 @@ test("only one of two callers joining at once gets the call", async ({
   otherCaller,
 }) => {
   await receiver.goto(`/${group}/`);
-  await receiver.getByRole("button", { name: "Join call" }).click();
+  await receiver.getByRole("button", { name: "Join Call" }).click();
   for (const page of [caller, otherCaller]) {
     await page.goto(`/${group}/`);
-    await expect(page.getByRole("button", { name: "Join call" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Join Call" })).toBeEnabled();
   }
 
   // Press both buttons at (nearly) the same moment.
   await Promise.all(
     [caller, otherCaller].map((page) =>
-      page.getByRole("button", { name: "Join call" }).evaluate((b: HTMLButtonElement) => {
+      page.getByRole("button", { name: "Join Call" }).evaluate((b: HTMLButtonElement) => {
         b.click();
       }),
     ),
@@ -34,5 +34,5 @@ test("only one of two callers joining at once gets the call", async ({
     .toEqual([0, 1]);
   const [loser] = (await caller.locator("video.remote-view").count()) ? [otherCaller] : [caller];
   await expect(loser.getByText("Grandma is in a call")).toBeVisible();
-  await expect(loser.getByRole("button", { name: "Join call" })).toBeDisabled();
+  await expect(loser.getByRole("button", { name: "Join Call" })).toBeDisabled();
 });

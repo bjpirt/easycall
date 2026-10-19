@@ -39,8 +39,8 @@ function statusText(
  * The caller (family) view. Idle shows the receiver's availability, and "Join
  * call" is only enabled while they're waiting (or to get back into our own call
  * after it dropped, e.g. the app was closed and reopened). During a call the receiver fills
- * the screen, with your own camera in the corner, a Hang up button, and a notice
- * while it's connecting or reconnecting. While it's in use (from Join call until
+ * the screen, with your own camera in the corner, an End Call button, and a notice
+ * while it's connecting or reconnecting. While it's in use (from Join Call until
  * the call ends) the screen is kept awake.
  */
 export function mountCaller(
@@ -94,7 +94,7 @@ export function mountCaller(
   const view = (): HTMLElement[] => {
     switch (screen.screen) {
       case "idle": {
-        const join = element("button", "Join call");
+        const join = element("button", canRejoin ? "Re-join Call" : "Join Call");
         join.disabled = availability !== "available" && !canRejoin;
         join.addEventListener("click", () => {
           render({ screen: "joining" });
@@ -125,8 +125,8 @@ export function mountCaller(
   };
 
   const hangUp = (): HTMLButtonElement => {
-    const button = element("button", "Hang up");
-    button.className = "hang-up";
+    const button = element("button", "End Call");
+    button.className = "end-call";
     button.addEventListener("click", () => {
       session.hangUp();
     });

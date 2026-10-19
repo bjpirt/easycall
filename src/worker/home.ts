@@ -39,7 +39,7 @@ export function homePage(signedInAs?: string): string {
   <h1>easyCall</h1>
   <p>A simple way for family to video call someone who finds normal video apps too hard.</p>
   <p>Their tablet answers calls by itself, so they never need to touch the screen. When
-    they're ready for a call, family see it here and tap <strong>Join call</strong>.</p>
+    they're ready for a call, family see it here and tap <strong>Join Call</strong>.</p>
   ${action}
 </main>
 </body>

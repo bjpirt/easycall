@@ -10,11 +10,11 @@ type State =
   | { screen: "active"; camera: MediaStream; remote: MediaStream };
 
 /**
- * The receiver (tablet) view. Idle shows a "Join call" button for staff;
+ * The receiver (tablet) view. Idle shows a "Join Call" button for staff;
  * joining turns on the camera and waits. Calls are answered automatically and
  * there's nothing to tap once joined. A notice shows while a call is connecting
- * or reconnecting. While it's in use (from Join call until it's idle again) the
- * screen is kept awake, and Join call goes full screen (the tap is the gesture
+ * or reconnecting. While it's in use (from Join Call until it's idle again) the
+ * screen is kept awake, and Join Call goes full screen (the tap is the gesture
  * browsers require).
  */
 export function mountReceiver(
@@ -59,7 +59,7 @@ export function mountReceiver(
   const view = (state: State): HTMLElement[] => {
     switch (state.screen) {
       case "idle": {
-        const button = element("button", "Join call");
+        const button = element("button", "Join Call");
         button.addEventListener("click", join);
         return state.error ? [button, element("p", state.error)] : [button];
       }

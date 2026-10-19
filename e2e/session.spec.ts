@@ -28,7 +28,7 @@ test("each person sees the view for their role", async ({ group, receiver, calle
   await receiver.goto(`/${group}/`);
   await caller.goto(`/${group}/`);
 
-  await expect(receiver.getByRole("button", { name: "Join call" })).toBeVisible();
+  await expect(receiver.getByRole("button", { name: "Join Call" })).toBeVisible();
   await expect(receiver.getByText("Grandma")).toHaveCount(0); // the receiver view has no status line
   await expect(caller.getByText("Grandma isn't available right now")).toBeVisible();
   await expect(caller.getByText("Signed in as Ben")).toBeVisible();

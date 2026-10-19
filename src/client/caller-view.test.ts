@@ -30,9 +30,9 @@ const button = (name: string) =>
 const videos = () => [...root.querySelectorAll("video")].map((v) => [v.className, v.srcObject]);
 
 describe("caller view", () => {
-  it("shows that it's connecting, with Join call disabled", () => {
+  it("shows that it's connecting, with Join Call disabled", () => {
     expect(root.textContent).toContain("Connecting…");
-    expect(button("Join call")?.disabled).toBe(true);
+    expect(button("Join Call")?.disabled).toBe(true);
   });
 
   it.each([
@@ -40,12 +40,12 @@ describe("caller view", () => {
     ["available", "Grandma is ready for a call", false],
     ["in-call", "Grandma is in a call", true],
   ] as [Status, string, boolean][])(
-    "when %s shows '%s' (Join call disabled: %s)",
+    "when %s shows '%s' (Join Call disabled: %s)",
     (status, text, disabled) => {
       emit({ type: "status", status });
 
       expect(root.textContent).toContain(text);
-      expect(button("Join call")?.disabled).toBe(disabled);
+      expect(button("Join Call")?.disabled).toBe(disabled);
     },
   );
 
@@ -53,30 +53,30 @@ describe("caller view", () => {
     emit({ type: "status", status: "in-call", caller: "Ben", rejoin: true });
 
     expect(root.textContent).toContain("Your call with Grandma is still going");
-    expect(button("Join call")?.disabled).toBe(false);
+    expect(button("Re-join Call")?.disabled).toBe(false);
   });
 
-  it("Join call starts joining", () => {
+  it("Join Call starts joining", () => {
     emit({ type: "status", status: "available" });
 
-    button("Join call")?.click();
+    button("Join Call")?.click();
 
     expect(session.join).toHaveBeenCalled();
     expect(root.textContent).toContain("Starting…");
   });
 
-  it("shows calling with a self-view and Hang up", () => {
+  it("shows calling with a self-view and End Call", () => {
     const camera = new MediaStream();
 
     emit({ type: "calling", camera });
-    button("Hang up")?.click();
+    button("End Call")?.click();
 
     expect(root.textContent).toContain("Calling…");
     expect(videos()).toEqual([["self-view", camera]]);
     expect(session.hangUp).toHaveBeenCalled();
   });
 
-  it("shows the receiver full screen with a self-view and Hang up", () => {
+  it("shows the receiver full screen with a self-view and End Call", () => {
     const camera = new MediaStream();
     const remote = new MediaStream();
 
@@ -86,7 +86,7 @@ describe("caller view", () => {
       ["remote-view", remote],
       ["self-view", camera],
     ]);
-    expect(button("Hang up")).toBeDefined();
+    expect(button("End Call")).toBeDefined();
   });
 
   it("doesn't interrupt a call when the status changes", () => {
@@ -105,9 +105,9 @@ describe("caller view", () => {
     emit({ type: "call-ended" });
 
     expect(root.textContent).toBe(
-      "Grandma isn't available right now" + "Join call" + "Signed in as Ben",
+      "Grandma isn't available right now" + "Join Call" + "Signed in as Ben",
     );
-    expect(button("Join call")?.disabled).toBe(true);
+    expect(button("Join Call")?.disabled).toBe(true);
   });
 
   it("shows why a call ended", () => {
@@ -119,13 +119,13 @@ describe("caller view", () => {
   it.each([
     ["reconnecting", "Reconnecting…"],
     ["closed", "Disconnected. Reload the page to try again."],
-  ] as const)("when the connection is %s, says so with Join call disabled", (state, text) => {
+  ] as const)("when the connection is %s, says so with Join Call disabled", (state, text) => {
     emit({ type: "status", status: "available" });
 
     emit({ type: "connection", state });
 
     expect(root.textContent).toContain(text);
-    expect(button("Join call")?.disabled).toBe(true);
+    expect(button("Join Call")?.disabled).toBe(true);
   });
 
   it("once reconnected, waits for the room's status", () => {

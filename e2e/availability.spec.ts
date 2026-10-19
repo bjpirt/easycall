@@ -6,7 +6,7 @@ test("callers see the receiver's availability and can only join when it's free",
   caller,
   otherCaller,
 }) => {
-  const join = (page: typeof caller) => page.getByRole("button", { name: "Join call" });
+  const join = (page: typeof caller) => page.getByRole("button", { name: "Join Call" });
 
   await caller.goto(`/${group}/`);
   await otherCaller.goto(`/${group}/`);
@@ -26,7 +26,7 @@ test("callers see the receiver's availability and can only join when it's free",
   await expect(join(otherCaller)).toBeDisabled();
 
   // Hanging up ends the session: the receiver goes back to idle, so it's unavailable.
-  await caller.getByRole("button", { name: "Hang up" }).click();
+  await caller.getByRole("button", { name: "End Call" }).click();
   await expect(otherCaller.getByText("Grandma isn't available right now")).toBeVisible();
   await expect(join(otherCaller)).toBeDisabled();
 
