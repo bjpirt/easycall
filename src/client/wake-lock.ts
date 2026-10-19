@@ -1,12 +1,7 @@
+import type { Page } from "./dom";
+
 /** Releases a wake lock taken by `keepAwake`. */
 export type Release = () => void;
-
-/** The parts of the page `keepAwake` needs (so tests can pass a fake). */
-export interface Page {
-  visibilityState: DocumentVisibilityState;
-  addEventListener: (type: "visibilitychange", listener: () => void) => void;
-  removeEventListener: (type: "visibilitychange", listener: () => void) => void;
-}
 
 /**
  * Keeps the screen on until released (Screen Wake Lock API). Browsers drop the

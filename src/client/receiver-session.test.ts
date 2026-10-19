@@ -1,16 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  receiverStarter,
-  type ReceiverDeps,
-  type ReceiverEvent,
-  type ReceiverSession,
-} from "./receiver-session";
+import { startReceiver, type ReceiverEvent, type ReceiverSession } from "./receiver-session";
+import type { SessionDeps } from "./sessions";
 import { FakeSocket, fakeCamera, fakePeer, type FakeCamera, type FakePeer } from "./test-fakes";
 
 let sockets: FakeSocket[];
 let camera: FakeCamera;
 let peers: FakePeer[];
-let deps: ReceiverDeps;
+let deps: SessionDeps;
 const iceServers = [{ urls: ["turn:turn.example.com:3478"], username: "u", credential: "c" }];
 let events: ReceiverEvent[];
 
@@ -47,7 +43,7 @@ afterEach(() => {
 
 /** Starts the session and waits until it has connected to the room. */
 async function start(): Promise<{ session: ReceiverSession; peer: FakePeer }> {
-  const session = receiverStarter(deps)((event) => events.push(event));
+  const session = startReceiver(deps, (event) => events.push(event));
   await vi.waitFor(() => {
     expect(peers).toHaveLength(1);
   });
@@ -184,7 +180,7 @@ describe("receiver session", () => {
   it("ends without connecting if the camera can't start", async () => {
     deps.getCamera = () => Promise.reject(new Error("denied"));
 
-    receiverStarter(deps)((event) => events.push(event));
+    startReceiver(deps, (event) => events.push(event));
 
     await vi.waitFor(() => {
       expect(events).toEqual([{ type: "ended", reason: "Couldn't start the camera." }]);

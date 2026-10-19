@@ -1,5 +1,5 @@
 import { appVersion } from "../shared/version";
-import type { Page } from "./wake-lock";
+import type { Page } from "./dom";
 
 /** How often an open page checks for a new version (pages in a call also hear it from the room). */
 export const checkEveryMs = 10 * 60_000;

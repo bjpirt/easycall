@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { callNotice, mediaState } from "./call-status";
+import { callNotice, mediaState, mediaTracker, type MediaState } from "./call-status";
 
 describe("mediaState", () => {
   it.each([
@@ -13,6 +13,20 @@ describe("mediaState", () => {
     ["closed", true, undefined],
   ] as const)("%s (connected before: %s) is %s", (state, before, expected) => {
     expect(mediaState(state, before)).toBe(expected);
+  });
+});
+
+describe("mediaTracker", () => {
+  it("reports the changes worth showing, remembering whether media has flowed", () => {
+    const reported: MediaState[] = [];
+    const track = mediaTracker((media) => reported.push(media));
+
+    expect(track("connecting")).toBeUndefined();
+    track("disconnected"); // before media ever flowed
+    track("connected");
+    expect(track("failed")).toBe("interrupted");
+
+    expect(reported).toEqual(["connecting", "connected", "interrupted"]);
   });
 });
 

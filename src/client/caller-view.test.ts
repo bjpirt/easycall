@@ -102,7 +102,7 @@ describe("caller view", () => {
     emit({ type: "calling", camera: new MediaStream() });
     emit({ type: "status", status: "unavailable" });
 
-    emit({ type: "call-ended" });
+    emit({ type: "ended" });
 
     expect(root.textContent).toBe(
       "Grandma isn't available right now" + "Join Call" + "Signed in as Ben",
@@ -111,7 +111,7 @@ describe("caller view", () => {
   });
 
   it("shows why a call ended", () => {
-    emit({ type: "call-ended", reason: "The call has ended." });
+    emit({ type: "ended", reason: "The call has ended." });
 
     expect(root.textContent).toContain("The call has ended.");
   });
@@ -191,7 +191,7 @@ describe("call notices", () => {
     emit({ type: "calling", camera: new MediaStream() });
     emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
     emit({ type: "media", state: "connected" });
-    emit({ type: "call-ended" });
+    emit({ type: "ended" });
 
     emit({ type: "calling", camera: new MediaStream() });
     emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
@@ -212,7 +212,7 @@ describe("keeping the screen awake", () => {
     emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
     expect(awake.take).toHaveBeenCalledTimes(1);
 
-    emit({ type: "call-ended" });
+    emit({ type: "ended" });
 
     expect(awake.release).toHaveBeenCalledTimes(1);
   });

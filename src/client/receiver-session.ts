@@ -1,17 +1,7 @@
-import type { IceServer } from "../shared/ice";
-import { mediaState, type MediaState } from "./call-status";
-import type { Peer, PeerFactory } from "./peer";
-import { openRoom, type RoomConnection } from "./room-connection";
-import { stopCamera, type RoomSocket } from "./signalling";
-
-export interface ReceiverDeps {
-  getCamera: () => Promise<MediaStream>;
-  getIceServers: () => Promise<IceServer[]>;
-  connect: () => RoomSocket;
-  createPeer: PeerFactory;
-  /** Told the app version the room is running, so an out-of-date page can update. */
-  onVersion?: (version: string) => void;
-}
+import { mediaTracker, type MediaState } from "./call-status";
+import type { Peer } from "./peer";
+import { openRoom } from "./room-connection";
+import { cameraFailed, startMedia, stopCamera, type SessionDeps } from "./sessions";
 
 export type ReceiverEvent =
   | { type: "waiting"; camera: MediaStream }
@@ -20,6 +10,7 @@ export type ReceiverEvent =
   | { type: "remote"; camera: MediaStream; remote: MediaStream }
   /** The call's media connection (see `MediaState`). */
   | { type: "media"; state: MediaState }
+  /** The session is over, and the receiver is back to idle; `reason` says why, if worth saying. */
   | { type: "ended"; reason?: string }
   /** The room connection: `reconnecting` after a drop, `connected` once back. */
   | { type: "connection"; state: "connected" | "reconnecting" };
@@ -29,126 +20,122 @@ export interface ReceiverSession {
   leave: () => void;
 }
 
-export type StartReceiver = (onEvent: (event: ReceiverEvent) => void) => ReceiverSession;
-
 /**
- * The receiver's session: turn on the camera and join the room, which makes the
- * receiver available. An incoming call is answered automatically. A dropped
- * connection reconnects by itself (the room holds the receiver's place, so a
- * call carries on). When the call ends, or nobody calls in time, the session
- * ends and the receiver goes back to idle.
+ * The receiver's session, from staff tapping Join Call until it's idle again:
+ * turn on the camera and join the room, which makes the receiver available.
+ * An incoming call is answered automatically. A dropped connection reconnects
+ * by itself (the room holds the receiver's place, so a call carries on). When
+ * the call ends, or nobody calls in time, the session ends.
  */
-export function receiverStarter(deps: ReceiverDeps): StartReceiver {
-  return (onEvent) => {
-    let ended = false;
-    let teardown = (): void => undefined;
-    /** Tells the room we're leaving on purpose, once connected. */
-    let sayGoodbye = (): void => undefined;
+export function startReceiver(
+  deps: SessionDeps,
+  onEvent: (event: ReceiverEvent) => void,
+): ReceiverSession {
+  let ended = false;
+  /** Set once connected: leaving tells the room, and ending tidies up. */
+  let live: { goodbye: () => void; teardown: () => void } | undefined;
 
-    const end = (reason?: string): void => {
-      if (ended) return;
-      ended = true;
-      teardown();
-      onEvent(reason === undefined ? { type: "ended" } : { type: "ended", reason });
-    };
+  const end = (reason?: string): void => {
+    if (ended) return;
+    ended = true;
+    live?.teardown();
+    onEvent(reason === undefined ? { type: "ended" } : { type: "ended", reason });
+  };
 
-    const run = async (): Promise<void> => {
-      const ice = deps.getIceServers(); // in parallel with the camera
-      let camera: MediaStream;
-      try {
-        camera = await deps.getCamera();
-      } catch {
-        end("Couldn't start the camera.");
-        return;
-      }
-      const iceServers = await ice;
-      if (ended) {
-        stopCamera(camera); // left while we were getting ready
-        return;
-      }
+  const run = async (): Promise<void> => {
+    const media = await startMedia(deps);
+    if (!media) {
+      end(cameraFailed);
+      return;
+    }
+    const { camera, iceServers } = media;
+    if (ended) {
+      stopCamera(camera); // left while we were getting ready
+      return;
+    }
 
-      let inCall = false;
-      let welcomed = false;
-      let connectedBefore = false;
-      /** The call we're answering, once one has started. */
-      let call: string | undefined;
-      const newPeer = (): Peer =>
-        deps.createPeer({
-          localStream: camera,
-          iceServers,
-          send: (signal) => {
-            room.send(signal);
-          },
-          onRemoteStream: (remote) => {
-            inCall = true;
-            onEvent({ type: "remote", camera, remote });
-          },
-          onConnectionState: (state) => {
-            const media = mediaState(state, connectedBefore);
-            if (media === "connected") connectedBefore = true;
-            if (media) onEvent({ type: "media", state: media });
-          },
-        });
-      let peer = newPeer();
-      const room: RoomConnection = openRoom(deps.connect, {
-        onMessage: (message) => {
-          switch (message.type) {
-            case "welcome":
-              deps.onVersion?.(message.version);
-              onEvent({ type: "connection", state: "connected" });
-              // Back after a drop, but the room didn't keep our place: the call is over.
-              if (inCall && !message.resumed) end("The call has ended.");
-              else if (!welcomed) onEvent({ type: "waiting", camera });
-              welcomed = true;
-              return;
-            case "offer":
-            case "answer":
-            case "candidate":
-              peer.handle(message).catch(console.error);
-              return;
-            case "incoming":
-              // A different call: the caller rejoined from a new page, so start afresh.
-              if (call !== undefined && call !== message.call) {
-                peer.close();
-                peer = newPeer();
-              }
-              call = message.call;
-              onEvent({ type: "incoming", name: message.name });
-              return;
-            case "hangup":
-              end("The call has ended.");
-              return;
-            case "timeout":
-              end("No calls just now.");
-              return;
-            default:
-              return;
-          }
+    let inCall = false;
+    let welcomed = false;
+    /** The call we're answering, once one has started. */
+    let call: string | undefined;
+    const onConnectionState = mediaTracker((state) => {
+      onEvent({ type: "media", state });
+    });
+    const newPeer = (): Peer =>
+      deps.createPeer({
+        localStream: camera,
+        iceServers,
+        send: (signal) => {
+          room.send(signal);
         },
-        onReconnecting: () => {
-          onEvent({ type: "connection", state: "reconnecting" });
+        onRemoteStream: (remote) => {
+          inCall = true;
+          onEvent({ type: "remote", camera, remote });
         },
-        onClosed: () => {
-          end("This screen was opened somewhere else.");
-        },
+        onConnectionState,
       });
+    let peer = newPeer();
 
-      sayGoodbye = () => {
+    const room = openRoom(deps.connect, {
+      onMessage: (message) => {
+        switch (message.type) {
+          case "welcome":
+            deps.onVersion?.(message.version);
+            onEvent({ type: "connection", state: "connected" });
+            // Back after a drop, but the room didn't keep our place: the call is over.
+            if (inCall && !message.resumed) end("The call has ended.");
+            else if (!welcomed) onEvent({ type: "waiting", camera });
+            welcomed = true;
+            return;
+          case "offer":
+          case "answer":
+          case "candidate":
+            peer.handle(message).catch(console.error);
+            return;
+          case "incoming":
+            // A different call: the caller rejoined from a new page, so start afresh.
+            if (call !== undefined && call !== message.call) {
+              peer.close();
+              peer = newPeer();
+            }
+            call = message.call;
+            onEvent({ type: "incoming", name: message.name });
+            return;
+          case "hangup":
+            end("The call has ended.");
+            return;
+          case "timeout":
+            end("No calls just now.");
+            return;
+          default:
+            return;
+        }
+      },
+      onReconnecting: () => {
+        onEvent({ type: "connection", state: "reconnecting" });
+      },
+      onClosed: () => {
+        end("This screen was opened somewhere else.");
+      },
+    });
+
+    live = {
+      goodbye: () => {
         room.send({ type: "hangup" });
-      };
-      teardown = () => {
+      },
+      teardown: () => {
         peer.close();
         stopCamera(camera);
         room.close();
-      };
-    };
-
-    void run();
-    return {
-      leave: () => {
-        sayGoodbye();
-        end();
       },
     };
+  };
+
+  void run();
+  return {
+    leave: () => {
+      live?.goodbye();
+      end();
+    },
   };
 }

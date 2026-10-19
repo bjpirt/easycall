@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { keepAwake, type Page } from "./wake-lock";
+import type { Page } from "./dom";
+import { keepAwake } from "./wake-lock";
 
 class FakeLock {
   released = false;

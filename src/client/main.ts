@@ -2,12 +2,11 @@ import { roomRole } from "../shared/roles";
 import { connectCaller } from "./caller-session";
 import { mountCaller } from "./caller-view";
 import { element } from "./dom";
-import { fetchIceServers } from "./ice";
-import { fetchMe } from "./me";
+import { fetchIceServers, fetchMe, roomUrl } from "./api";
 import { createPeer } from "./peer";
-import { receiverStarter } from "./receiver-session";
+import { startReceiver } from "./receiver-session";
 import { mountReceiver } from "./receiver-view";
-import { roomUrl } from "./room-url";
+import type { SessionDeps } from "./sessions";
 import { watchForUpdates } from "./updates";
 import { keepAwake, type Release } from "./wake-lock";
 import "./style.css";
@@ -56,26 +55,17 @@ async function start(root: HTMLElement): Promise<void> {
   }
 
   const { role, name, receiverName } = result.me;
-  const deps = {
+  const deps: SessionDeps = {
     getCamera: () => navigator.mediaDevices.getUserMedia({ video: true, audio: true }),
     getIceServers: () => fetchIceServers(page),
+    connect: () => new WebSocket(roomUrl(page, pageId)),
     createPeer,
     onVersion: updates.noteVersion,
   };
   if (roomRole(role) === "receiver") {
-    mountReceiver(
-      root,
-      receiverStarter({ ...deps, connect: () => new WebSocket(roomUrl(page, pageId)) }),
-      inUse,
-    );
+    mountReceiver(root, (onEvent) => startReceiver(deps, onEvent), inUse);
   } else {
-    mountCaller(
-      root,
-      { name, receiverName },
-      (onEvent) =>
-        connectCaller({ ...deps, connect: () => new WebSocket(roomUrl(page, pageId)) }, onEvent),
-      inUse,
-    );
+    mountCaller(root, { name, receiverName }, (onEvent) => connectCaller(deps, onEvent), inUse);
   }
 }
 

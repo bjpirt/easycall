@@ -1,18 +1,8 @@
-import type { IceServer } from "../shared/ice";
-import { mediaState, type MediaState } from "./call-status";
 import type { Status } from "../shared/protocol";
-import type { Peer, PeerFactory } from "./peer";
+import { mediaTracker, type MediaState } from "./call-status";
+import type { Peer } from "./peer";
 import { openRoom } from "./room-connection";
-import { stopCamera, type RoomSocket } from "./signalling";
-
-export interface CallerDeps {
-  getCamera: () => Promise<MediaStream>;
-  getIceServers: () => Promise<IceServer[]>;
-  connect: () => RoomSocket;
-  createPeer: PeerFactory;
-  /** Told the app version the room is running, so an out-of-date page can update. */
-  onVersion?: (version: string) => void;
-}
+import { cameraFailed, startMedia, stopCamera, type SessionDeps } from "./sessions";
 
 export type CallerEvent =
   /**
@@ -24,7 +14,8 @@ export type CallerEvent =
   | { type: "remote"; camera: MediaStream; remote: MediaStream }
   /** The call's media connection (see `MediaState`). */
   | { type: "media"; state: MediaState }
-  | { type: "call-ended"; reason?: string }
+  /** The call is over (or never started); `reason` says why, if worth saying. */
+  | { type: "ended"; reason?: string }
   /** The room connection: `reconnecting` after a drop, `connected` once back, `closed` for good. */
   | { type: "connection"; state: "connected" | "reconnecting" | "closed" };
 
@@ -36,6 +27,10 @@ export interface CallerSession {
 interface Call {
   camera: MediaStream;
   peer: Peer;
+  /** Follows the media connection, reporting `media` events. */
+  trackMedia: (state: RTCPeerConnectionState) => MediaState | undefined;
+  /** The media connection as last reported. */
+  media: MediaState;
 }
 
 /** How long a briefly `disconnected` call gets to recover by itself before we restart it. */
@@ -54,7 +49,7 @@ export const giveUpAfterMs = 30_000;
  * path with an ICE restart: the caller makes all offers, so the caller recovers.
  */
 export function connectCaller(
-  deps: CallerDeps,
+  deps: SessionDeps,
   onEvent: (event: CallerEvent) => void,
 ): CallerSession {
   let connected = false;
@@ -64,12 +59,14 @@ export function connectCaller(
   let pending: { cancelled: boolean } | undefined;
   let restartTimer: ReturnType<typeof setTimeout> | undefined;
   let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Whether media has flowed yet in this call. */
-  let connectedBefore = false;
 
   const giveUp = (): void => {
     room.send({ type: "hangup" });
-    endCall(connectedBefore ? "The call was cut off." : "Couldn't connect. Please try again.");
+    endCall(
+      call?.media === "interrupted"
+        ? "The call was cut off."
+        : "Couldn't connect. Please try again.",
+    );
   };
 
   /** Gives the call `giveUpAfterMs` to get media flowing (again), unless already counting. */
@@ -87,15 +84,14 @@ export function connectCaller(
     if (state === "failed") restart();
     else if (state === "disconnected") restartTimer = setTimeout(restart, restartAfterMs);
 
-    const media = mediaState(state, connectedBefore);
+    if (!call) return;
+    const media = call.trackMedia(state);
     if (media === "connected") {
-      connectedBefore = true;
       clearTimeout(giveUpTimer);
       giveUpTimer = undefined;
     } else if (media) {
       startGiveUpTimer();
     }
-    if (media) onEvent({ type: "media", state: media });
   };
 
   const endCall = (reason?: string): void => {
@@ -106,7 +102,7 @@ export function connectCaller(
     call.peer.close();
     stopCamera(call.camera);
     call = undefined;
-    onEvent(reason === undefined ? { type: "call-ended" } : { type: "call-ended", reason });
+    onEvent(reason === undefined ? { type: "ended" } : { type: "ended", reason });
   };
 
   const room = openRoom(deps.connect, {
@@ -163,17 +159,13 @@ export function connectCaller(
     if (call || pending || !connected) return;
     const attempt = { cancelled: false };
     pending = attempt;
-    const ice = deps.getIceServers(); // in parallel with the camera
-    let camera: MediaStream;
-    try {
-      camera = await deps.getCamera();
-    } catch {
-      pending = undefined;
-      onEvent({ type: "call-ended", reason: "Couldn't start the camera." });
+    const media = await startMedia(deps);
+    pending = undefined;
+    if (!media) {
+      onEvent({ type: "ended", reason: cameraFailed });
       return;
     }
-    const iceServers = await ice;
-    pending = undefined;
+    const { camera, iceServers } = media;
     if (attempt.cancelled) {
       stopCamera(camera); // hung up while the camera was starting
       return;
@@ -187,8 +179,11 @@ export function connectCaller(
       },
       onConnectionState,
     });
-    call = { camera, peer };
-    connectedBefore = false;
+    const trackMedia = mediaTracker((state) => {
+      if (call) call.media = state;
+      onEvent({ type: "media", state });
+    });
+    call = { camera, peer, trackMedia, media: "connecting" };
     onEvent({ type: "calling", camera });
     room.send({ type: "join" });
   };
@@ -199,7 +194,7 @@ export function connectCaller(
       if (pending) {
         pending.cancelled = true;
         pending = undefined;
-        onEvent({ type: "call-ended" });
+        onEvent({ type: "ended" });
         return;
       }
       if (call) room.send({ type: "hangup" });

@@ -16,6 +16,23 @@ export function mediaState(
   return undefined; // new / connecting / closed: no change worth showing
 }
 
+/**
+ * Follows a call's peer connection states, reporting each change worth showing
+ * (`connecting` until media first flows, then `connected` or `interrupted`).
+ * Returns the state it reported, if any.
+ */
+export function mediaTracker(
+  onMedia: (media: MediaState) => void,
+): (state: RTCPeerConnectionState) => MediaState | undefined {
+  let connectedBefore = false;
+  return (state) => {
+    const media = mediaState(state, connectedBefore);
+    if (media === "connected") connectedBefore = true;
+    if (media) onMedia(media);
+    return media;
+  };
+}
+
 /** The notice over a call screen, if any. */
 export function callNotice(media: MediaState, roomReconnecting: boolean): string | undefined {
   if (roomReconnecting || media === "interrupted") return "Reconnecting…";

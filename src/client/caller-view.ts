@@ -162,7 +162,7 @@ export function mountCaller(
         media = event.state;
         updateNotice();
         return;
-      case "call-ended":
+      case "ended":
         render(event.reason ? { screen: "idle", message: event.reason } : { screen: "idle" });
         return;
     }

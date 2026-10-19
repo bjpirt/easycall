@@ -1,5 +1,7 @@
-import type { Message } from "../shared/protocol";
-import { onMessage, sendMessage, type RoomSocket } from "./signalling";
+import { parseMessage, type Message } from "../shared/protocol";
+
+/** The parts of a WebSocket we use (so tests can pass a fake). */
+export type RoomSocket = Pick<WebSocket, "addEventListener" | "close" | "send">;
 
 /** Waits between reconnection attempts; the last one repeats. */
 export const retryDelays = [1000, 2000, 4000, 8000, 15_000];
@@ -33,7 +35,9 @@ export function openRoom(connect: () => RoomSocket, handlers: RoomHandlers): Roo
 
   const open = (): void => {
     socket = connect();
-    onMessage(socket, (message) => {
+    socket.addEventListener("message", (event: MessageEvent) => {
+      const message = parseMessage(event.data);
+      if (!message) return; // not valid: ignored
       if (message.type === "welcome") attempts = 0;
       handlers.onMessage(message);
     });
@@ -55,7 +59,7 @@ export function openRoom(connect: () => RoomSocket, handlers: RoomHandlers): Roo
   return {
     send: (message) => {
       try {
-        sendMessage(socket, message);
+        socket.send(JSON.stringify(message));
       } catch {
         // Not connected right now.
       }

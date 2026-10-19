@@ -3,16 +3,16 @@ import {
   connectCaller,
   giveUpAfterMs,
   restartAfterMs,
-  type CallerDeps,
   type CallerEvent,
   type CallerSession,
 } from "./caller-session";
+import type { SessionDeps } from "./sessions";
 import { FakeSocket, fakeCamera, fakePeer, type FakeCamera, type FakePeer } from "./test-fakes";
 
 let sockets: FakeSocket[];
 let camera: FakeCamera;
 let peers: FakePeer[];
-let deps: CallerDeps;
+let deps: SessionDeps;
 const iceServers = [{ urls: ["turn:turn.example.com:3478"], username: "u", credential: "c" }];
 let events: CallerEvent[];
 let session: CallerSession;
@@ -132,7 +132,7 @@ describe("caller session", () => {
     expect(peer.call).not.toHaveBeenCalled();
     expect(peer.close).toHaveBeenCalled();
     expect(camera.stopped()).toBe(true);
-    expect(events.at(-1)).toEqual({ type: "call-ended", reason });
+    expect(events.at(-1)).toEqual({ type: "ended", reason });
   });
 
   it("passes signals to the peer, sends the peer's to the room, and reports the video", async () => {
@@ -160,7 +160,7 @@ describe("caller session", () => {
     expect(peer.close).toHaveBeenCalled();
     expect(camera.stopped()).toBe(true);
     expect(socket().close).not.toHaveBeenCalled(); // still watching availability
-    expect(events.at(-1)).toEqual({ type: "call-ended" });
+    expect(events.at(-1)).toEqual({ type: "ended" });
   });
 
   it("hanging up while the camera starts cancels the join", async () => {
@@ -175,7 +175,7 @@ describe("caller session", () => {
       expect(camera.stopped()).toBe(true);
     });
     expect(socket().send).not.toHaveBeenCalled();
-    expect(events.at(-1)).toEqual({ type: "call-ended" });
+    expect(events.at(-1)).toEqual({ type: "ended" });
   });
 
   it("the call ends if the receiver leaves", async () => {
@@ -184,7 +184,7 @@ describe("caller session", () => {
     socket().receive({ type: "hangup" });
 
     expect(camera.stopped()).toBe(true);
-    expect(events.at(-1)).toEqual({ type: "call-ended", reason: "The call has ended." });
+    expect(events.at(-1)).toEqual({ type: "ended", reason: "The call has ended." });
   });
 
   it("reports a camera failure", async () => {
@@ -193,7 +193,7 @@ describe("caller session", () => {
     session.join();
 
     await vi.waitFor(() => {
-      expect(events.at(-1)).toEqual({ type: "call-ended", reason: "Couldn't start the camera." });
+      expect(events.at(-1)).toEqual({ type: "ended", reason: "Couldn't start the camera." });
     });
     expect(socket().send).not.toHaveBeenCalled();
   });
@@ -276,7 +276,7 @@ describe("caller session", () => {
       expect(socket().sent().at(-1)).toEqual({ type: "hangup" });
       expect(peer.close).toHaveBeenCalled();
       expect(events.at(-1)).toEqual({
-        type: "call-ended",
+        type: "ended",
         reason: "Couldn't connect. Please try again.",
       });
     });
@@ -300,7 +300,7 @@ describe("caller session", () => {
       peer.options.onConnectionState?.("failed");
       vi.advanceTimersByTime(giveUpAfterMs);
 
-      expect(events.at(-1)).toEqual({ type: "call-ended", reason: "The call was cut off." });
+      expect(events.at(-1)).toEqual({ type: "ended", reason: "The call was cut off." });
     });
 
     it("keeps a recovered call going", async () => {
@@ -347,7 +347,7 @@ describe("caller session", () => {
       socket().receive({ type: "welcome", resumed: false, version: "test-version" });
 
       expect(camera.stopped()).toBe(true);
-      expect(events.at(-1)).toEqual({ type: "call-ended", reason: "The call has ended." });
+      expect(events.at(-1)).toEqual({ type: "ended", reason: "The call has ended." });
     });
 
     it("can't join while reconnecting", () => {
@@ -365,7 +365,7 @@ describe("caller session", () => {
 
       expect(camera.stopped()).toBe(true);
       expect(events.slice(-2)).toEqual([
-        { type: "call-ended" },
+        { type: "ended" },
         { type: "connection", state: "closed" },
       ]);
     });

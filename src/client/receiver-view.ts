@@ -1,10 +1,10 @@
 import { callNotice, type MediaState } from "./call-status";
 import { element, nameLabel, video } from "./dom";
-import type { ReceiverSession, StartReceiver } from "./receiver-session";
+import type { ReceiverEvent, ReceiverSession } from "./receiver-session";
 import { keepAwake, type Release } from "./wake-lock";
 
 type State =
-  | { screen: "idle"; error?: string }
+  | { screen: "idle"; message?: string }
   | { screen: "joining" }
   | { screen: "waiting"; camera: MediaStream }
   | { screen: "active"; camera: MediaStream; remote: MediaStream };
@@ -20,7 +20,8 @@ type State =
  */
 export function mountReceiver(
   root: HTMLElement,
-  start: StartReceiver,
+  /** Starts a session (when staff tap Join Call). */
+  start: (onEvent: (event: ReceiverEvent) => void) => ReceiverSession,
   /** Called when the view comes into use; the result is called when it's idle again. */
   inUse: () => Release = keepAwake,
 ): void {
@@ -62,7 +63,7 @@ export function mountReceiver(
       case "idle": {
         const button = element("button", "Join Call");
         button.addEventListener("click", join);
-        return state.error ? [button, element("p", state.error)] : [button];
+        return state.message ? [button, element("p", state.message)] : [button];
       }
       case "joining":
         return [element("p", "Starting…")];
@@ -110,7 +111,7 @@ export function mountReceiver(
           updateNotice();
           return;
         case "ended":
-          render(event.reason ? { screen: "idle", error: event.reason } : { screen: "idle" });
+          render(event.reason ? { screen: "idle", message: event.reason } : { screen: "idle" });
           return;
       }
     });

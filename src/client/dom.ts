@@ -24,3 +24,10 @@ export function nameLabel(name: string): HTMLElement {
   el.className = "name-label";
   return el;
 }
+
+/** The parts of the page that track its visibility (so tests can pass a fake). */
+export interface Page {
+  visibilityState: DocumentVisibilityState;
+  addEventListener: (type: "visibilitychange", listener: () => void) => void;
+  removeEventListener: (type: "visibilitychange", listener: () => void) => void;
+}

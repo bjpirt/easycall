@@ -71,9 +71,11 @@ flowchart LR
 | `src/worker/home.ts`            | The home page (`/`)                                                      |
 | `src/worker/manifest.ts`        | The installable app's manifest, per group and role                       |
 | `src/client/main.ts`            | Asks who you are, then mounts the receiver or caller view                |
+| `src/client/sessions.ts`        | What both sessions share: their dependencies, starting the camera        |
 | `src/client/*-session.ts`       | The receiver's and caller's call logic (room messages, peer, recovery)   |
 | `src/client/*-view.ts`          | The screens: a `State` union and a `render()` that rebuilds the content  |
 | `src/client/room-connection.ts` | The room WebSocket, reconnecting with backoff                            |
+| `src/client/api.ts`             | Asking the Worker who you are and for ICE servers; the room's URL        |
 | `src/client/peer.ts`            | A thin wrapper around `RTCPeerConnection`                                |
 | `src/client/call-status.ts`     | Maps connection states to "Connecting…" / "Reconnecting…"                |
 | `src/client/updates.ts`         | Reloads long-open pages to a new deploy, but only when idle              |
