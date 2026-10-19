@@ -10,7 +10,7 @@ import type { Group } from "./directory";
 export function manifest(group: Group, role: MemberRole): object {
   const path = `/${group.slug}/`;
   const receiver = role === "receiver";
-  const name = receiver ? "easyCall" : `Call ${group.displayName}`;
+  const name = receiver ? "easyCall" : `Call ${group.receiverName}`;
   return {
     id: path,
     name,

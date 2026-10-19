@@ -12,20 +12,28 @@ import {
   type TimerName,
 } from "./room-state";
 
-const receiver: Connection = { id: "r", role: "receiver", email: "tablet@x.com" };
-const alice: Connection = { id: "a", role: "caller", email: "alice@x.com" };
-const bob: Connection = { id: "b", role: "caller", email: "bob@x.com" };
+const receiver: Connection = { id: "r", role: "receiver", email: "tablet@x.com", name: "Grandma" };
+const alice: Connection = { id: "a", role: "caller", email: "alice@x.com", name: "Alice" };
+const bob: Connection = { id: "b", role: "caller", email: "bob@x.com", name: "Bob" };
 const offer: Message = { type: "offer", sdp: "OFFER" };
 
-const participant = (email: string, connection: string | null) => ({ email, connection });
-const tablet = participant("tablet@x.com", "r");
-const tabletAway = participant("tablet@x.com", null);
-const aliceInCall = participant("alice@x.com", "a");
-const aliceAway = participant("alice@x.com", null);
+const participant = (email: string, name: string, connection: string | null) => ({
+  email,
+  name,
+  connection,
+});
+const tablet = participant("tablet@x.com", "Grandma", "r");
+const tabletAway = participant("tablet@x.com", "Grandma", null);
+const aliceInCall = participant("alice@x.com", "Alice", "a");
+const aliceAway = participant("alice@x.com", "Alice", null);
 
 const room = (overrides: Partial<RoomState>): RoomState => ({ ...emptyRoom, ...overrides });
 const sendTo = (to: string, message: Message) => ({ type: "send", to, message });
-const statusTo = (to: string, s: string) => sendTo(to, { type: "status", status: s } as Message);
+const statusTo = (to: string, s: string, caller?: string) =>
+  sendTo(
+    to,
+    (caller ? { type: "status", status: s, caller } : { type: "status", status: s }) as Message,
+  );
 const welcome = (to: string, resumed: boolean) => sendTo(to, { type: "welcome", resumed });
 const timer = (name: TimerName, running: boolean) => ({ type: "timer", name, running });
 const close = (id: string, reason: string) => ({ type: "close", id, reason });
@@ -64,7 +72,7 @@ describe("connect", () => {
 
   it("a different receiver replaces the old one, ends its call and restarts the window", () => {
     const before = room({
-      receiver: participant("old@x.com", "old"),
+      receiver: participant("old@x.com", "Old", "old"),
       callers: ["a"],
       active: aliceInCall,
     });
@@ -91,8 +99,9 @@ describe("join", () => {
     expect(state.active).toEqual(aliceInCall);
     expect(effects).toEqual([
       sendTo("a", { type: "joined" }),
-      statusTo("a", "in-call"),
-      statusTo("b", "in-call"),
+      sendTo("r", { type: "incoming", name: "Alice" }),
+      statusTo("a", "in-call", "Alice"),
+      statusTo("b", "in-call", "Alice"),
       timer("ready", false),
     ]);
   });
@@ -102,7 +111,7 @@ describe("join", () => {
     ["the receiver is reconnecting", room({ receiver: tabletAway, callers: ["a"] })],
     [
       "someone else is in the call",
-      room({ receiver: tablet, callers: ["a", "b"], active: participant("bob@x.com", "b") }),
+      room({ receiver: tablet, callers: ["a", "b"], active: participant("bob@x.com", "Bob", "b") }),
     ],
   ])("is refused when %s", (_, before) => {
     expect(receive(before, alice, { type: "join" })).toEqual({
@@ -155,7 +164,11 @@ describe("signals", () => {
   it.each([
     ["a caller who isn't in the call", inCall, bob],
     ["the receiver with no call", room({ receiver: tablet }), receiver],
-    ["a replaced receiver", inCall, { id: "old", role: "receiver", email: "tablet@x.com" }],
+    [
+      "a replaced receiver",
+      inCall,
+      { id: "old", role: "receiver", email: "tablet@x.com", name: "Grandma" },
+    ],
   ] as [string, RoomState, Connection][])("from %s are dropped", (_, state, from) => {
     expect(receive(state, from, offer).effects).toEqual([]);
   });
@@ -209,7 +222,9 @@ describe("a dropped connection (no hang-up)", () => {
   it("a replaced receiver leaving changes nothing", () => {
     const before = room({ receiver: tablet, callers: ["a"] });
 
-    expect(disconnect(before, { id: "old", role: "receiver", email: "tablet@x.com" })).toEqual({
+    expect(
+      disconnect(before, { id: "old", role: "receiver", email: "tablet@x.com", name: "Grandma" }),
+    ).toEqual({
       state: before,
       effects: [],
     });
@@ -223,11 +238,15 @@ describe("reconnecting", () => {
     const { state, effects } = connect(before, { ...alice, id: "a2" });
 
     expect(state).toEqual(
-      room({ receiver: tablet, callers: ["b", "a2"], active: participant("alice@x.com", "a2") }),
+      room({
+        receiver: tablet,
+        callers: ["b", "a2"],
+        active: participant("alice@x.com", "Alice", "a2"),
+      }),
     );
     expect(effects).toEqual([
       welcome("a2", true),
-      statusTo("a2", "in-call"),
+      statusTo("a2", "in-call", "Alice"),
       timer("caller-away", false),
     ]);
   });
@@ -238,7 +257,7 @@ describe("reconnecting", () => {
     const { state, effects } = connect(before, bob);
 
     expect(state.active).toEqual(aliceAway);
-    expect(effects).toEqual([welcome("b", false), statusTo("b", "in-call")]);
+    expect(effects).toEqual([welcome("b", false), statusTo("b", "in-call", "Alice")]);
   });
 
   it("the receiver gets their place back, call and all", () => {
@@ -247,9 +266,17 @@ describe("reconnecting", () => {
     const { state, effects } = connect(before, { ...receiver, id: "r2" });
 
     expect(state).toEqual(
-      room({ receiver: participant("tablet@x.com", "r2"), callers: ["a"], active: aliceInCall }),
+      room({
+        receiver: participant("tablet@x.com", "Grandma", "r2"),
+        callers: ["a"],
+        active: aliceInCall,
+      }),
     );
-    expect(effects).toEqual([welcome("r2", true), timer("receiver-away", false)]);
+    expect(effects).toEqual([
+      welcome("r2", true),
+      sendTo("r2", { type: "incoming", name: "Alice" }), // so a reloaded tablet knows who's calling
+      timer("receiver-away", false),
+    ]);
   });
 
   it("the receiver reloading replaces their old connection but keeps their place", () => {
@@ -257,7 +284,7 @@ describe("reconnecting", () => {
 
     const { state, effects } = connect(before, { ...receiver, id: "r2" });
 
-    expect(state.receiver).toEqual(participant("tablet@x.com", "r2"));
+    expect(state.receiver).toEqual(participant("tablet@x.com", "Grandma", "r2"));
     expect(effects).toEqual([welcome("r2", true), close("r", "Replaced by a newer connection")]);
   });
 });

@@ -2,36 +2,43 @@ import { isMemberRole, type MemberRole } from "../shared/roles";
 
 export interface Group {
   slug: string;
-  /** What callers see the receiver called, e.g. "Grandma". */
-  displayName: string;
+  /** The receiver's name, e.g. "Grandma": what callers see the group as. */
+  receiverName: string;
+}
+
+export interface Member {
+  role: MemberRole;
+  /** What others in the group see this person called (per group). */
+  name: string;
 }
 
 /** Who's in which group. Read through this interface so storage can change (env var now, D1 later). */
 export interface Directory {
   group: (slug: string) => Group | undefined;
-  /** A user's role in a group, or `undefined` if they aren't a member. Emails are case-insensitive. */
-  role: (slug: string, email: string) => MemberRole | undefined;
+  /** A user's membership of a group, or `undefined` if they aren't a member. Emails are case-insensitive. */
+  member: (slug: string, email: string) => Member | undefined;
   /** Every member's email, across all groups (e.g. to check the Access policy allows them). */
   emails: () => string[];
 }
 
-/** A group's slug is its URL path: lowercase letters, digits and hyphens. */
+/** A group's key is its URL path: lowercase letters, digits and hyphens. */
 export const slugPattern = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 interface GroupEntry extends Group {
-  members: Map<string, MemberRole>;
+  members: Map<string, Member>;
 }
 
 /**
  * Reads the directory from the `DIRECTORY` secret (JSON), e.g.
  *
- *   {"groups": {"smith": {"displayName": "Grandma", "members": {
- *     "tablet@example.com": "receiver", "ben@example.com": "admin" }}}}
+ *   {"groups": {"smith": {"members": {
+ *     "tablet@example.com": {"role": "receiver", "name": "Grandma"},
+ *     "ben@example.com": {"role": "admin", "name": "Ben"} }}}}
  *
- * Invalid members are skipped. Invalid groups, including ones with more than
- * one receiver, are skipped entirely. A missing or unreadable directory is
- * empty, so nothing is accessible. Each problem is reported to `onProblem`
- * (logged by default).
+ * Every member needs a role and a name; invalid members are skipped. Every group
+ * needs exactly one receiver (whose name is what callers see); other invalid
+ * groups are skipped entirely. A missing or unreadable directory is empty, so
+ * nothing is accessible. Each problem is reported to `onProblem` (logged by default).
  */
 export function parseDirectory(
   json: string | undefined,
@@ -47,9 +54,9 @@ export function parseDirectory(
   return {
     group: (slug) => {
       const entry = groups.get(slug);
-      return entry && { slug: entry.slug, displayName: entry.displayName };
+      return entry && { slug: entry.slug, receiverName: entry.receiverName };
     },
-    role: (slug, email) => groups.get(slug)?.members.get(normaliseEmail(email)),
+    member: (slug, email) => groups.get(slug)?.members.get(normaliseEmail(email)),
     emails: () => [...new Set([...groups.values()].flatMap((g) => [...g.members.keys()]))].sort(),
   };
 }
@@ -66,28 +73,36 @@ function parseGroup(
   value: unknown,
   onProblem: (problem: string) => void,
 ): GroupEntry | undefined {
-  const { displayName, members } = (value ?? {}) as { displayName?: unknown; members?: unknown };
   if (!slugPattern.test(slug)) {
     onProblem(`group "${slug}" isn't a valid URL name (lowercase letters, digits and hyphens)`);
     return undefined;
   }
-  if (typeof displayName !== "string" || !displayName.trim()) {
-    onProblem(`group "${slug}" needs a displayName`);
-    return undefined;
+
+  const members = new Map<string, Member>();
+  const { members: raw } = (value ?? {}) as { members?: unknown };
+  for (const [email, entry] of Object.entries(isRecord(raw) ? raw : {})) {
+    const member = parseMember(entry);
+    if (!email.includes("@")) onProblem(`group "${slug}": "${email}" isn't an email address`);
+    else if (!member) {
+      onProblem(`group "${slug}": ${email} needs a role (receiver, caller or admin) and a name`);
+    } else members.set(normaliseEmail(email), member);
   }
 
-  const entries = new Map<string, MemberRole>();
-  const raw = typeof members === "object" && members !== null ? members : {};
-  for (const [email, role] of Object.entries(raw)) {
-    if (!email.includes("@")) onProblem(`group "${slug}": "${email}" isn't an email address`);
-    else if (!isMemberRole(role)) onProblem(`group "${slug}": ${email} has an unknown role`);
-    else entries.set(normaliseEmail(email), role);
-  }
-  if ([...entries.values()].filter((role) => role === "receiver").length > 1) {
-    onProblem(`group "${slug}" has more than one receiver`);
+  const receivers = [...members.values()].filter((m) => m.role === "receiver");
+  const [receiver] = receivers;
+  if (receivers.length !== 1 || !receiver) {
+    onProblem(`group "${slug}" needs exactly one receiver (it has ${String(receivers.length)})`);
     return undefined;
   }
-  return { slug, displayName, members: entries };
+  return { slug, receiverName: receiver.name, members };
+}
+
+function parseMember(value: unknown): Member | undefined {
+  if (!isRecord(value)) return undefined;
+  const { role, name } = value;
+  return isMemberRole(role) && typeof name === "string" && name.trim()
+    ? { role, name: name.trim() }
+    : undefined;
 }
 
 function readGroups(
@@ -96,16 +111,17 @@ function readGroups(
 ): Record<string, unknown> {
   if (!json) return {};
   try {
-    const value: unknown = JSON.parse(json);
-    const groups = (value as { groups?: unknown } | null)?.groups;
-    if (typeof groups === "object" && groups !== null && !Array.isArray(groups)) {
-      return groups as Record<string, unknown>;
-    }
+    const groups = (JSON.parse(json) as { groups?: unknown } | null)?.groups;
+    if (isRecord(groups)) return groups;
   } catch {
     // fall through
   }
   onProblem('it isn\'t valid JSON of the form {"groups": {...}}');
   return {};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normaliseEmail(email: string): string {

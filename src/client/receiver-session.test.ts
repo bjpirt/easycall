@@ -111,6 +111,14 @@ describe("receiver session", () => {
     expect(socket().sent()).toEqual([{ type: "answer", sdp: "ANSWER" }]);
   });
 
+  it("reports who's calling", async () => {
+    await start();
+
+    socket().receive({ type: "incoming", name: "Ben" });
+
+    expect(events).toEqual([{ type: "incoming", name: "Ben" }]);
+  });
+
   it("reports the caller's video", async () => {
     const { peer } = await start();
     const remote = new MediaStream();

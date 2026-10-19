@@ -38,7 +38,7 @@ async function start(root: HTMLElement): Promise<void> {
       break;
   }
 
-  const { role, displayName } = result.me;
+  const { role, name, receiverName } = result.me;
   const deps = {
     getCamera: () => navigator.mediaDevices.getUserMedia({ video: true, audio: true }),
     getIceServers: () => fetchIceServers(page),
@@ -47,7 +47,7 @@ async function start(root: HTMLElement): Promise<void> {
   if (roomRole(role) === "receiver") {
     mountReceiver(root, receiverStarter({ ...deps, connect: () => new WebSocket(roomUrl(page)) }));
   } else {
-    mountCaller(root, displayName, (onEvent) =>
+    mountCaller(root, { name, receiverName }, (onEvent) =>
       connectCaller({ ...deps, connect: () => new WebSocket(roomUrl(page)) }, onEvent),
     );
   }

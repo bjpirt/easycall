@@ -1,11 +1,10 @@
 {
   "groups": {
     "smith": {
-      "displayName": "Grandma",
       "members": {
-        "tablet@example.com": "receiver",
-        "you@example.com": "admin",
-        "sister@example.com": "caller"
+        "tablet@example.com": { "role": "receiver", "name": "Grandma" },
+        "you@example.com": { "role": "admin", "name": "Ben" },
+        "sister@example.com": { "role": "caller", "name": "Sarah" }
       }
     }
   }

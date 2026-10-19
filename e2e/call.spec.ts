@@ -30,6 +30,11 @@ test("caller joins and is connected to the waiting receiver", async ({
   await join(caller, group);
 
   await expectConnected(receiver, caller);
+
+  // Each side can see who they're talking to.
+  await expect(caller.locator(".name-label")).toHaveText("Grandma");
+  await expect(receiver.locator(".name-label")).toHaveText("Ben");
+  await expect(caller.locator(".name-label")).toBeVisible();
 });
 
 test("caller hangs up: receiver shows the call has ended, staff can rejoin", async ({

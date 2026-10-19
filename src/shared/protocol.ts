@@ -35,8 +35,10 @@ export type Message =
   | { type: "refused" }
   /** Room → receiver: nobody called within the ready window, so you've been disconnected. */
   | { type: "timeout" }
-  /** Room → callers: the receiver's availability. */
-  | { type: "status"; status: Status };
+  /** Room → callers: the receiver's availability (and, during a call, who's calling). */
+  | { type: "status"; status: Status; caller?: string }
+  /** Room → receiver: who's calling, when a call starts. */
+  | { type: "incoming"; name: string };
 
 /** Parses a raw WebSocket message, returning `undefined` if it isn't valid. */
 export function parseMessage(raw: unknown): Message | undefined {
@@ -68,7 +70,12 @@ export function parseMessage(raw: unknown): Message | undefined {
         ? { type: "welcome", resumed: value.resumed }
         : undefined;
     case "status":
-      return isStatus(value.status) ? { type: "status", status: value.status } : undefined;
+      if (!isStatus(value.status)) return undefined;
+      return typeof value.caller === "string"
+        ? { type: "status", status: value.status, caller: value.caller }
+        : { type: "status", status: value.status };
+    case "incoming":
+      return typeof value.name === "string" ? { type: "incoming", name: value.name } : undefined;
     default:
       return undefined;
   }

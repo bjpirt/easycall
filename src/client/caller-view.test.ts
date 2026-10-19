@@ -16,7 +16,7 @@ beforeEach(() => {
   awake.release.mockClear();
   mountCaller(
     root,
-    "Grandma",
+    { name: "Ben", receiverName: "Grandma" },
     (onEvent) => {
       emit = onEvent;
       return session;
@@ -97,7 +97,9 @@ describe("caller view", () => {
 
     emit({ type: "call-ended" });
 
-    expect(root.textContent).toBe("Grandma isn't available right now" + "Join call");
+    expect(root.textContent).toBe(
+      "Grandma isn't available right now" + "Join call" + "Signed in as Ben",
+    );
     expect(button("Join call")?.disabled).toBe(true);
   });
 
@@ -206,5 +208,24 @@ describe("keeping the screen awake", () => {
     emit({ type: "call-ended" });
 
     expect(awake.release).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("names", () => {
+  it("shows who you're signed in as", () => {
+    expect(root.querySelector(".signed-in")?.textContent).toBe("Signed in as Ben");
+  });
+
+  it("says who's in a call with the receiver", () => {
+    emit({ type: "status", status: "in-call", caller: "Sarah" });
+
+    expect(root.textContent).toContain("Grandma is in a call with Sarah");
+  });
+
+  it("labels the receiver's video during the call", () => {
+    emit({ type: "calling", camera: new MediaStream() });
+    emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+
+    expect(root.querySelector(".name-label")?.textContent).toBe("Grandma");
   });
 });

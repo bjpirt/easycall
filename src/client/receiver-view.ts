@@ -1,5 +1,5 @@
 import { callNotice, type MediaState } from "./call-status";
-import { element, video } from "./dom";
+import { element, nameLabel, video } from "./dom";
 import type { StartReceiver } from "./receiver-session";
 import { keepAwake, type Release } from "./wake-lock";
 
@@ -23,15 +23,17 @@ export function mountReceiver(
   fullscreen: () => void = goFullscreen,
 ): void {
   let release: Release | undefined;
-  let screen: State["screen"] = "idle";
+  let current: State = { screen: "idle" };
   let media: MediaState = "connecting";
   let roomReconnecting = false;
+  /** Who's calling, once a call starts. */
+  let caller: string | undefined;
   /** Updated in place, so the videos aren't rebuilt (which would make them flash). */
   const notice = element("p");
   notice.className = "notice";
 
   const render = (state: State): void => {
-    screen = state.screen;
+    current = state;
     root.className = `call receiver ${state.screen}`;
     root.replaceChildren(...view(state));
     updateNotice();
@@ -47,7 +49,7 @@ export function mountReceiver(
   };
 
   const updateNotice = (): void => {
-    const text = screen === "active" ? callNotice(media, roomReconnecting) : undefined;
+    const text = current.screen === "active" ? callNotice(media, roomReconnecting) : undefined;
     notice.textContent = text ?? "";
     notice.hidden = text === undefined;
   };
@@ -62,9 +64,17 @@ export function mountReceiver(
       case "joining":
         return [element("p", "Starting…")];
       case "waiting":
-        return [element("p", "Waiting for a call…"), video(state.camera, "self-view")];
+        return [
+          element("p", caller ? `${caller} is calling…` : "Waiting for a call…"),
+          video(state.camera, "self-view"),
+        ];
       case "active":
-        return [video(state.remote, "remote-view"), video(state.camera, "self-view"), notice];
+        return [
+          video(state.remote, "remote-view"),
+          ...(caller ? [nameLabel(caller)] : []),
+          video(state.camera, "self-view"),
+          notice,
+        ];
     }
   };
 
@@ -72,6 +82,7 @@ export function mountReceiver(
     fullscreen();
     media = "connecting";
     roomReconnecting = false;
+    caller = undefined;
     render({ screen: "joining" });
     start((event) => {
       switch (event.type) {
@@ -80,6 +91,10 @@ export function mountReceiver(
           return;
         case "remote":
           render({ screen: "active", camera: event.camera, remote: event.remote });
+          return;
+        case "incoming":
+          caller = event.name;
+          if (current.screen === "waiting") render(current);
           return;
         case "media":
           media = event.state;

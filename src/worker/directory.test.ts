@@ -6,16 +6,17 @@ beforeEach(() => {
 });
 
 const directoryOf = (groups: unknown) => parseDirectory(JSON.stringify({ groups }));
+const receiver = (name = "Grandma") => ({ role: "receiver", name });
 
 describe("parseDirectory", () => {
-  it("finds groups by slug", () => {
+  it("finds groups by key, named after their receiver", () => {
     const directory = directoryOf({
-      smith: { displayName: "Grandma" },
-      "jones-2": { displayName: "Dad" },
+      smith: { members: { "tablet@x.com": receiver("Grandma") } },
+      "jones-2": { members: { "pad@x.com": receiver("Dad") } },
     });
 
-    expect(directory.group("smith")).toEqual({ slug: "smith", displayName: "Grandma" });
-    expect(directory.group("jones-2")).toEqual({ slug: "jones-2", displayName: "Dad" });
+    expect(directory.group("smith")).toEqual({ slug: "smith", receiverName: "Grandma" });
+    expect(directory.group("jones-2")).toEqual({ slug: "jones-2", receiverName: "Dad" });
     expect(directory.group("nobody")).toBeUndefined();
   });
 
@@ -30,17 +31,20 @@ describe("parseDirectory", () => {
   });
 
   it.each([
-    ["an invalid slug", "Smith Family", { displayName: "Grandma" }],
-    ["a slug ending in a hyphen", "smith-", { displayName: "Grandma" }],
-    ["no display name", "smith", {}],
-    ["a blank display name", "smith", { displayName: "  " }],
+    ["an invalid key", "Smith Family", { members: { "a@x.com": receiver() } }],
+    ["a key ending in a hyphen", "smith-", { members: { "a@x.com": receiver() } }],
+    ["no members", "smith", {}],
+    ["no receiver", "smith", { members: { "a@x.com": { role: "caller", name: "Ann" } } }],
     [
       "more than one receiver",
       "smith",
-      { displayName: "Grandma", members: { "a@x.com": "receiver", "b@x.com": "receiver" } },
+      { members: { "a@x.com": receiver("A"), "b@x.com": receiver("B") } },
     ],
   ])("skips a group with %s", (_, slug, group) => {
-    const directory = directoryOf({ [slug]: group, ok: { displayName: "Mum" } });
+    const directory = directoryOf({
+      [slug]: group,
+      ok: { members: { "t@x.com": receiver("Mum") } },
+    });
 
     expect(directory.group(slug)).toBeUndefined();
     expect(directory.group("ok")).toBeDefined();
@@ -49,44 +53,56 @@ describe("parseDirectory", () => {
   describe("members", () => {
     const directory = directoryOf({
       smith: {
-        displayName: "Grandma",
         members: {
-          "Tablet@Example.com": "receiver",
-          "ben@example.com": "admin",
-          "sis@example.com": "caller",
-          "not-an-email": "caller",
-          "bad@example.com": "superuser",
+          "Tablet@Example.com": receiver("Grandma"),
+          "ben@example.com": { role: "admin", name: "  Ben " },
+          "sis@example.com": { role: "caller", name: "Sarah" },
+          "not-an-email": { role: "caller", name: "X" },
+          "nameless@example.com": { role: "caller" },
+          "blank@example.com": { role: "caller", name: " " },
+          "bad@example.com": { role: "superuser", name: "Bad" },
+          "old-format@example.com": "caller",
         },
       },
-      jones: { displayName: "Dad", members: { "ben@example.com": "caller" } },
+      jones: {
+        members: {
+          "pad@x.com": receiver("Dad"),
+          "ben@example.com": { role: "caller", name: "Uncle Ben" },
+        },
+      },
     });
 
-    it("looks up each member's role in a group", () => {
-      expect(directory.role("smith", "tablet@example.com")).toBe("receiver");
-      expect(directory.role("smith", "ben@example.com")).toBe("admin");
-      expect(directory.role("smith", "sis@example.com")).toBe("caller");
+    it("looks up each member's role and name in a group", () => {
+      expect(directory.member("smith", "tablet@example.com")).toEqual(receiver("Grandma"));
+      expect(directory.member("smith", "ben@example.com")).toEqual({ role: "admin", name: "Ben" });
+      expect(directory.member("smith", "sis@example.com")).toEqual({
+        role: "caller",
+        name: "Sarah",
+      });
     });
 
     it("matches emails case-insensitively, ignoring surrounding spaces", () => {
-      expect(directory.role("smith", " TABLET@example.COM ")).toBe("receiver");
+      expect(directory.member("smith", " TABLET@example.COM ")?.role).toBe("receiver");
     });
 
-    it("lets a user have a different role in each group", () => {
-      expect(directory.role("jones", "ben@example.com")).toBe("caller");
+    it("lets someone have a different role and name in each group", () => {
+      expect(directory.member("jones", "ben@example.com")).toEqual({
+        role: "caller",
+        name: "Uncle Ben",
+      });
     });
 
     it.each([
       ["a non-member", "smith", "stranger@example.com"],
       ["a member of another group", "jones", "sis@example.com"],
       ["an invalid email", "smith", "not-an-email"],
+      ["a member without a name", "smith", "nameless@example.com"],
+      ["a member with a blank name", "smith", "blank@example.com"],
       ["an invalid role", "smith", "bad@example.com"],
+      ["the old format (just a role)", "smith", "old-format@example.com"],
       ["an unknown group", "nobody", "ben@example.com"],
-    ])("has no role for %s", (_, slug, email) => {
-      expect(directory.role(slug, email)).toBeUndefined();
-    });
-
-    it("allows a group with no members yet", () => {
-      expect(directoryOf({ smith: { displayName: "Grandma" } }).group("smith")).toBeDefined();
+    ])("isn't found for %s", (_, slug, email) => {
+      expect(directory.member(slug, email)).toBeUndefined();
     });
   });
 });
@@ -94,35 +110,39 @@ describe("parseDirectory", () => {
 describe("emails", () => {
   it("lists every member once, normalised and sorted", () => {
     const directory = directoryOf({
-      smith: { displayName: "Grandma", members: { "Zed@x.com": "caller", "amy@x.com": "admin" } },
-      jones: { displayName: "Dad", members: { "amy@x.com": "caller" } },
+      smith: {
+        members: { "Zed@x.com": receiver(), "amy@x.com": { role: "admin", name: "Amy" } },
+      },
+      jones: {
+        members: { "t@x.com": receiver("Dad"), "amy@x.com": { role: "caller", name: "Amy" } },
+      },
     });
 
-    expect(directory.emails()).toEqual(["amy@x.com", "zed@x.com"]);
+    expect(directory.emails()).toEqual(["amy@x.com", "t@x.com", "zed@x.com"]);
   });
 });
 
 describe("directoryProblems", () => {
   it("is empty for a valid directory", () => {
-    const json = JSON.stringify({
-      groups: { smith: { displayName: "Grandma", members: { "a@x.com": "receiver" } } },
-    });
-
-    expect(directoryProblems(json)).toEqual([]);
+    expect(
+      directoryProblems(
+        JSON.stringify({ groups: { smith: { members: { "a@x.com": receiver() } } } }),
+      ),
+    ).toEqual([]);
   });
 
   it("describes every problem", () => {
     const json = JSON.stringify({
       groups: {
-        "Bad Name": { displayName: "X" },
-        nameless: {},
+        "Bad Name": { members: { "a@x.com": receiver() } },
+        empty: {},
         smith: {
-          displayName: "Grandma",
           members: {
-            "not-an-email": "caller",
-            "a@x.com": "boss",
-            "r1@x.com": "receiver",
-            "r2@x.com": "receiver",
+            "not-an-email": { role: "caller", name: "X" },
+            "a@x.com": { role: "boss", name: "A" },
+            "b@x.com": { role: "caller" },
+            "r1@x.com": receiver("One"),
+            "r2@x.com": receiver("Two"),
           },
         },
       },
@@ -130,10 +150,11 @@ describe("directoryProblems", () => {
 
     expect(directoryProblems(json)).toEqual([
       'group "Bad Name" isn\'t a valid URL name (lowercase letters, digits and hyphens)',
-      'group "nameless" needs a displayName',
+      'group "empty" needs exactly one receiver (it has 0)',
       'group "smith": "not-an-email" isn\'t an email address',
-      'group "smith": a@x.com has an unknown role',
-      'group "smith" has more than one receiver',
+      'group "smith": a@x.com needs a role (receiver, caller or admin) and a name',
+      'group "smith": b@x.com needs a role (receiver, caller or admin) and a name',
+      'group "smith" needs exactly one receiver (it has 2)',
     ]);
   });
 

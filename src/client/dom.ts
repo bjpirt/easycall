@@ -17,3 +17,10 @@ export function video(stream: MediaStream, kind: "self-view" | "remote-view"): H
   el.srcObject = stream;
   return el;
 }
+
+/** A name shown over someone's video, so you can see who's on the call. */
+export function nameLabel(name: string): HTMLElement {
+  const el = element("p", name);
+  el.className = "name-label";
+  return el;
+}

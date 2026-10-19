@@ -37,13 +37,12 @@ export const e2eGroups = Array.from({ length: maxWorkers }, (_, worker) =>
   Array.from({ length: groupsPerWorker }, (_, index) => e2eGroupName(worker, index)),
 ).flat();
 
-/** Every E2E group has the same members. */
+/** Every E2E group has the same members (the receiver's name is what callers see). */
 export const e2eGroup = {
-  displayName: "Grandma",
   members: {
-    [users.receiver]: "receiver",
-    [users.caller]: "caller",
-    [users.otherCaller]: "caller",
-    [users.admin]: "admin",
+    [users.receiver]: { role: "receiver", name: "Grandma" },
+    [users.caller]: { role: "caller", name: "Ben" },
+    [users.otherCaller]: { role: "caller", name: "Sarah" },
+    [users.admin]: { role: "admin", name: "Ada" },
   },
 };

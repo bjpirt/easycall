@@ -4,14 +4,18 @@ import { defineConfig } from "vitest/config";
 const testDirectory = JSON.stringify({
   groups: {
     alpha: {
-      displayName: "Alpha",
       members: {
-        "receiver@example.com": "receiver",
-        "caller@example.com": "caller",
-        "admin@example.com": "admin",
+        "receiver@example.com": { role: "receiver", name: "Alpha" },
+        "caller@example.com": { role: "caller", name: "Cal" },
+        "admin@example.com": { role: "admin", name: "Ada" },
       },
     },
-    beta: { displayName: "Beta", members: { "caller@example.com": "caller" } },
+    beta: {
+      members: {
+        "beta-receiver@example.com": { role: "receiver", name: "Beta" },
+        "caller@example.com": { role: "caller", name: "Cal" },
+      },
+    },
   },
 });
 

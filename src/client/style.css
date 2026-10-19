@@ -77,3 +77,18 @@ body {
   transform: none;
   background: none;
 }
+
+.call .name-label {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  margin: 0;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgb(0 0 0 / 60%);
+}
+
+.call .signed-in {
+  font-size: 1rem;
+  color: #aaa;
+}

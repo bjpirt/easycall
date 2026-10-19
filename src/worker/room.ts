@@ -25,7 +25,7 @@ type Deadlines = Partial<Record<TimerName, number>>;
  * connections survive the object being evicted from memory.
  */
 export class Room extends DurableObject<Env> {
-  /** Only the Worker can reach a DO, so `role` and `email` come from the directory and session. */
+  /** Only the Worker can reach a DO, so `role`, `email` and `name` come from the directory and session. */
   override async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
@@ -33,11 +33,12 @@ export class Room extends DurableObject<Env> {
     const params = new URL(request.url).searchParams;
     const role = params.get("role");
     const email = params.get("email");
-    if (!isRole(role) || !email) {
-      return new Response("Unknown role or email", { status: 400 });
+    const name = params.get("name");
+    if (!isRole(role) || !email || !name) {
+      return new Response("Unknown role, email or name", { status: 400 });
     }
 
-    const connection: Connection = { id: crypto.randomUUID(), role, email };
+    const connection: Connection = { id: crypto.randomUUID(), role, email, name };
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server, [connection.id]);
     server.serializeAttachment(connection);

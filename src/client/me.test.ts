@@ -9,7 +9,7 @@ const respond = (response: Response | Error) =>
 
 describe("fetchMe", () => {
   it("asks the group's API who we are", async () => {
-    const me = { email: "ben@example.com", role: "admin", displayName: "Grandma" };
+    const me = { email: "ben@example.com", name: "Ben", role: "admin", receiverName: "Grandma" };
     const fetcher = respond(Response.json(me));
 
     expect(await fetchMe(page, fetcher)).toEqual({ type: "member", me });

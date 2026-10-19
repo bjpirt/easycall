@@ -62,7 +62,8 @@ function upgrade(query: string): Promise<Response> {
 /** Connects as the receiver (tablet@) or a caller (a fresh email unless given). */
 async function join(role: "receiver" | "caller", email?: string): Promise<Client> {
   const who = email ?? (role === "receiver" ? "tablet@x.com" : `${crypto.randomUUID()}@x.com`);
-  const { webSocket } = await upgrade(`role=${role}&email=${who}`);
+  const name = who.split("@")[0] ?? "";
+  const { webSocket } = await upgrade(`role=${role}&email=${who}&name=${name}`);
   if (!webSocket) throw new Error("No WebSocket");
   webSocket.accept();
   open.push(webSocket);
@@ -82,6 +83,7 @@ async function runOut(name: TimerName): Promise<void> {
 const timers = () =>
   runInDurableObject(room, (_, state) => state.storage.kv.get<Record<string, number>>("timers"));
 const status = (s: string): Message => ({ type: "status", status: s }) as Message;
+const inCallWith = (caller: string): Message => ({ type: "status", status: "in-call", caller });
 const offer: Message = { type: "offer", sdp: "OFFER" };
 const answer: Message = { type: "answer", sdp: "ANSWER" };
 
@@ -117,7 +119,13 @@ describe("room", () => {
     const watcher = await join("caller");
     await inCall();
 
-    await watcher.expectToReceive(status("in-call"));
+    await watcher.expectToReceive(inCallWith("alice"));
+  });
+
+  it("tells the receiver who's calling", async () => {
+    const { receiver } = await inCall();
+
+    await receiver.expectToReceive({ type: "incoming", name: "alice" });
   });
 
   it("relays signals between the receiver and the caller in the call", async () => {
@@ -276,7 +284,11 @@ describe("room", () => {
     });
   });
 
-  it.each(["role=intruder&email=a@x.com", "role=caller"])("rejects %s", async (query) => {
+  it.each([
+    "role=intruder&email=a@x.com&name=A",
+    "role=caller&name=A",
+    "role=caller&email=a@x.com",
+  ])("rejects %s", async (query) => {
     expect((await upgrade(query)).status).toBe(400);
   });
 

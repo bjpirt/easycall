@@ -58,7 +58,12 @@ export default {
         });
       case "/api/me":
         return Response.json(
-          { email: member.email, role: member.role, displayName: group.displayName },
+          {
+            email: member.email,
+            name: member.name,
+            role: member.role,
+            receiverName: group.receiverName,
+          },
           {
             headers: { ...noStore, "Set-Cookie": await sessionCookie(member.email, member.secret) },
           },
@@ -67,12 +72,13 @@ export default {
         // Credentials are per call, so never cache them.
         return Response.json({ iceServers: await iceServers(env) }, { headers: noStore });
       case "/api/room": {
-        // The room trusts these: the role comes from the directory and the email from
-        // the session, never from the browser.
+        // The room trusts these: the role and name come from the directory and the
+        // email from the session, never from the browser.
         const target = new URL(request.url);
         target.search = new URLSearchParams({
           role: roomRole(member.role),
           email: member.email,
+          name: member.name,
         }).toString();
         return env.ROOM.getByName(group.slug).fetch(new Request(target, request));
       }
@@ -83,7 +89,7 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 type Member =
-  | { type: "member"; email: string; role: MemberRole; secret: string }
+  | { type: "member"; email: string; name: string; role: MemberRole; secret: string }
   | { type: "signed-out" }
   | { type: "not-member" };
 
@@ -97,8 +103,8 @@ async function authenticate(
   const secret = env.SESSION_SECRET;
   const email = await readSession(request, secret);
   if (!email || !secret) return { type: "signed-out" };
-  const role = directory.role(group.slug, email);
-  return role ? { type: "member", email, role, secret } : { type: "not-member" };
+  const member = directory.member(group.slug, email);
+  return member ? { type: "member", email, ...member, secret } : { type: "not-member" };
 }
 
 const noStore = { "Cache-Control": "no-store" };

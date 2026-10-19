@@ -13,6 +13,8 @@ export interface ReceiverDeps {
 
 export type ReceiverEvent =
   | { type: "waiting"; camera: MediaStream }
+  /** Who's calling, as a call starts. */
+  | { type: "incoming"; name: string }
   | { type: "remote"; camera: MediaStream; remote: MediaStream }
   /** The call's media connection (see `MediaState`). */
   | { type: "media"; state: MediaState }
@@ -94,6 +96,9 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
             case "answer":
             case "candidate":
               peer.handle(message).catch(console.error);
+              return;
+            case "incoming":
+              onEvent(message);
               return;
             case "hangup":
               end("The call has ended.");

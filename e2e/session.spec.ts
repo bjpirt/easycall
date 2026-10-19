@@ -8,8 +8,9 @@ test("a signed-in member can ask who they are in the group", async ({ group, cal
   expect(response.status()).toBe(200);
   expect(await response.json()).toEqual({
     email: users.admin,
+    name: "Ada",
     role: "admin",
-    displayName: "Grandma",
+    receiverName: "Grandma",
   });
 });
 
@@ -30,6 +31,7 @@ test("each person sees the view for their role", async ({ group, receiver, calle
   await expect(receiver.getByRole("button", { name: "Join call" })).toBeVisible();
   await expect(receiver.getByText("Grandma")).toHaveCount(0); // the receiver view has no status line
   await expect(caller.getByText("Grandma isn't available right now")).toBeVisible();
+  await expect(caller.getByText("Signed in as Ben")).toBeVisible();
 });
 
 test("someone not signed in is sent to log in, and back afterwards", async ({ group, caller }) => {

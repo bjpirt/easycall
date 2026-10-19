@@ -121,3 +121,27 @@ it("goes full screen when staff tap Join call", () => {
 
   expect(fullscreen).toHaveBeenCalledTimes(1);
 });
+
+describe("names", () => {
+  it("shows who's calling while it connects, then labels their video", () => {
+    const send = join();
+    send({ type: "waiting", camera: new MediaStream() });
+
+    send({ type: "incoming", name: "Ben" });
+    expect(root.textContent).toContain("Ben is calling…");
+
+    send({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+    expect(root.querySelector(".name-label")?.textContent).toBe("Ben");
+  });
+
+  it("forgets the caller once the call is over", () => {
+    const send = join();
+    send({ type: "incoming", name: "Ben" });
+    send({ type: "ended", reason: "The call has ended." });
+
+    root.querySelector("button")?.click();
+    emit?.({ type: "waiting", camera: new MediaStream() });
+
+    expect(root.textContent).toContain("Waiting for a call…");
+  });
+});

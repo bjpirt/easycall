@@ -6,6 +6,8 @@ export interface Connection {
   role: Role;
   /** The signed-in user (from the session), so they can be recognised when they reconnect. */
   email: string;
+  /** Their name in the group (from the directory), shown to the others. */
+  name: string;
 }
 
 /**
@@ -15,6 +17,7 @@ export interface Connection {
  */
 export interface Participant {
   email: string;
+  name: string;
   connection: string | null;
 }
 
@@ -50,25 +53,22 @@ export function status(state: RoomState): Status {
   return state.active === null ? "available" : "in-call";
 }
 
-export function connect(state: RoomState, { id, role, email }: Connection): Transition {
+export function connect(state: RoomState, { id, role, email, name }: Connection): Transition {
   if (role === "caller") {
     const callers = [...state.callers, id];
     const resumes = state.active?.email === email && state.active.connection === null;
-    const next = { ...state, callers, active: resumes ? { email, connection: id } : state.active };
-    return finish(state, next, [
-      welcome(id, resumes),
-      send(id, { type: "status", status: status(next) }),
-    ]);
+    const active = resumes ? { email, name, connection: id } : state.active;
+    const next = { ...state, callers, active };
+    return finish(state, next, [welcome(id, resumes), send(id, statusMessage(next))]);
   }
 
   if (state.receiver?.email === email) {
     // The same receiver reconnecting (or reloading): they keep their place, call and all.
     const old = state.receiver.connection;
-    const effects = old === null ? [] : [close(old, "Replaced by a newer connection")];
-    return finish(state, { ...state, receiver: { email, connection: id } }, [
-      welcome(id, true),
-      ...effects,
-    ]);
+    const effects: Effect[] = [welcome(id, true)];
+    if (old !== null) effects.push(close(old, "Replaced by a newer connection"));
+    if (state.active) effects.push(send(id, { type: "incoming", name: state.active.name }));
+    return finish(state, { ...state, receiver: { email, name, connection: id } }, effects);
   }
 
   // A different receiver replaces the old one and ends any call.
@@ -76,7 +76,11 @@ export function connect(state: RoomState, { id, role, email }: Connection): Tran
   const old = state.receiver?.connection;
   if (old) effects.push(close(old, "Replaced by a newer connection"));
   if (state.active?.connection) effects.push(send(state.active.connection, { type: "hangup" }));
-  return finish(state, { ...state, receiver: { email, connection: id }, active: null }, effects);
+  return finish(
+    state,
+    { ...state, receiver: { email, name, connection: id }, active: null },
+    effects,
+  );
 }
 
 export function receive(state: RoomState, from: Connection, message: Message): Transition {
@@ -90,9 +94,14 @@ export function receive(state: RoomState, from: Connection, message: Message): T
         // Only one caller at a time, and only while the receiver is connected.
         return { state, effects: [send(from.id, { type: "refused" })] };
       }
-      return finish(state, { ...state, active: { email: from.email, connection: from.id } }, [
-        send(from.id, { type: "joined" }),
-      ]);
+      return finish(
+        state,
+        { ...state, active: { email: from.email, name: from.name, connection: from.id } },
+        [
+          send(from.id, { type: "joined" }),
+          send(state.receiver.connection, { type: "incoming", name: from.name }),
+        ],
+      );
 
     case "hangup":
       return isActive ? endCall(state) : unchanged(state);
@@ -174,6 +183,14 @@ function isWaiting(state: RoomState): boolean {
   return state.receiver !== null && state.active === null;
 }
 
+/** The status message callers see, naming the caller during a call. */
+function statusMessage(state: RoomState): Message {
+  const now = status(state);
+  return now === "in-call" && state.active
+    ? { type: "status", status: now, caller: state.active.name }
+    : { type: "status", status: now };
+}
+
 function send(to: string, message: Message): Effect {
   return { type: "send", to, message };
 }
@@ -202,9 +219,9 @@ function unchanged(state: RoomState): Transition {
 function finish(before: RoomState, after: RoomState, effects: Effect[]): Transition {
   const all = [...effects];
 
-  const now = status(after);
-  if (now !== status(before)) {
-    all.push(...after.callers.map((id) => send(id, { type: "status", status: now })));
+  if (status(after) !== status(before)) {
+    const message = statusMessage(after);
+    all.push(...after.callers.map((id) => send(id, message)));
   }
 
   // The ready window restarts if a different receiver takes over while waiting.

@@ -5,8 +5,9 @@ import { parseMessage, type Message } from "../shared/protocol";
 import worker from "./index";
 import { sessionToken } from "./session";
 
-// The test directory (vitest.config.ts) has groups "alpha" (receiver@, caller@
-// and admin@example.com) and "beta" (caller@), and SESSION_SECRET "test-secret".
+// The test directory (vitest.config.ts) has groups "alpha" (receiver@ "Alpha",
+// caller@ "Cal" and admin@example.com "Ada") and "beta" (beta-receiver@ "Beta" and
+// caller@ "Cal"), and SESSION_SECRET "test-secret".
 // Built assets aren't available here, so serving the page is covered by E2E.
 
 function withHeader(init: RequestInit, name: string, value: string): RequestInit {
@@ -99,17 +100,18 @@ describe("the APIs", () => {
 
 describe("/<group>/api/me", () => {
   it.each([
-    ["receiver@example.com", "receiver"],
-    ["caller@example.com", "caller"],
-    ["Admin@Example.com", "admin"],
-  ])("tells %s their role and the receiver's name", async (email, role) => {
+    ["receiver@example.com", "receiver", "Alpha"],
+    ["caller@example.com", "caller", "Cal"],
+    ["Admin@Example.com", "admin", "Ada"],
+  ])("tells %s their role, their name and the receiver's name", async (email, role, name) => {
     const response = await get("/alpha/api/me", await as(email));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       email: email.toLowerCase(),
+      name,
       role,
-      displayName: "Alpha",
+      receiverName: "Alpha",
     });
     expect(response.headers.get("Cache-Control")).toBe("no-store");
   });

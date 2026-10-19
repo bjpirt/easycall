@@ -13,7 +13,8 @@ export interface CallerDeps {
 }
 
 export type CallerEvent =
-  | { type: "status"; status: Status }
+  /** The receiver's availability; `caller` is who's in the call, if anyone. */
+  | { type: "status"; status: Status; caller?: string }
   | { type: "calling"; camera: MediaStream }
   | { type: "remote"; camera: MediaStream; remote: MediaStream }
   /** The call's media connection (see `MediaState`). */
@@ -116,7 +117,7 @@ export function connectCaller(
           return;
         case "status":
           status = message.status;
-          onEvent({ type: "status", status });
+          onEvent(message);
           return;
         case "joined":
           call?.peer.call().catch(console.error);

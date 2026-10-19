@@ -102,9 +102,10 @@ npx wrangler secret put TURN_KEY_API_TOKEN   # from step 4
 npm run deploy
 ```
 
-Then set up the **directory**: the groups, the name callers see for each receiver, and each
-member's role (`receiver`, `caller` or `admin`; one receiver per group). It lives in a local
-`directory.json`, which is gitignored so members' emails never reach the repo:
+Then set up the **directory**: the groups and their members. Each member has a role (`receiver`,
+`caller` or `admin`) and a name, which the others see on screen. Every group has exactly one
+receiver, and the receiver's name is what callers see the group as ("Call Grandma"). It lives in a
+local `directory.json`, which is gitignored so members' emails never reach the repo:
 
 ```sh
 cp directory.example.json directory.json   # then edit it
@@ -115,20 +116,20 @@ npm run directory:push                      # checks it, then uploads it as the 
 {
   "groups": {
     "smith": {
-      "displayName": "Grandma",
       "members": {
-        "tablet@example.com": "receiver",
-        "you@example.com": "admin",
-        "sister@example.com": "caller"
+        "tablet@example.com": { "role": "receiver", "name": "Grandma" },
+        "you@example.com": { "role": "admin", "name": "Ben" },
+        "sister@example.com": { "role": "caller", "name": "Sarah" }
       }
     }
   }
 }
 ```
 
-The group's URL is `https://easycall.<subdomain>.workers.dev/smith/`. `directory:push` checks the
-file with the same rules as the app and uploads nothing if it finds mistakes (an unknown role, two
-receivers in a group, and so on). Use `npm run directory:push -- --check` to check without
+The group's key (`smith`) is its URL: `https://easycall.<subdomain>.workers.dev/smith/`. A name can
+differ between groups. `directory:push` checks the file with the same rules as the app and uploads
+nothing if it finds mistakes (a missing name, an unknown role, a group without exactly one
+receiver, and so on). Use `npm run directory:push -- --check` to check without
 uploading. Afterwards it lists every member's email: each must also be allowed by the Access policy
 (step 3). To add or remove someone, edit `directory.json`, run `npm run directory:push` again, and
 update the Access policy. Changes take effect straight away; redeploying isn't needed.

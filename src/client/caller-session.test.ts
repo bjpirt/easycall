@@ -82,6 +82,12 @@ describe("caller session", () => {
     expect(events.at(-1)).toEqual({ type: "status", status: "available" });
   });
 
+  it("reports who's in a call", () => {
+    socket().receive({ type: "status", status: "in-call", caller: "Sarah" });
+
+    expect(events.at(-1)).toEqual({ type: "status", status: "in-call", caller: "Sarah" });
+  });
+
   it("join turns on the camera and asks the room for the call", async () => {
     await join();
 

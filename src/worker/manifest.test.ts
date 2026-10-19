@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { manifest } from "./manifest";
 
-const group = { slug: "smith", displayName: "Grandma" };
+const group = { slug: "smith", receiverName: "Grandma" };
 
 describe("manifest", () => {
   it("installs the receiver's tablet full screen", () => {

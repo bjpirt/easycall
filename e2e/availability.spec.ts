@@ -22,7 +22,7 @@ test("callers see the receiver's availability and can only join when it's free",
   // While one caller is in the call, everyone else sees it's busy.
   await join(caller).click();
   await expect(caller.locator("video.remote-view")).toBeVisible();
-  await expect(otherCaller.getByText("Grandma is in a call")).toBeVisible();
+  await expect(otherCaller.getByText("Grandma is in a call with Ben")).toBeVisible();
   await expect(join(otherCaller)).toBeDisabled();
 
   // Hanging up ends the session: the receiver goes back to idle, so it's unavailable.

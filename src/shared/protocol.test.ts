@@ -17,6 +17,8 @@ describe("parseMessage", () => {
     { type: "status", status: "unavailable" },
     { type: "status", status: "available" },
     { type: "status", status: "in-call" },
+    { type: "status", status: "in-call", caller: "Ben" },
+    { type: "incoming", name: "Ben" },
   ];
 
   it.each(valid)("accepts $type", (message) => {
@@ -39,6 +41,7 @@ describe("parseMessage", () => {
     ["bad candidate", JSON.stringify({ type: "candidate", candidate: { candidate: 1 } })],
     ["unknown status", JSON.stringify({ type: "status", status: "asleep" })],
     ["welcome without resumed", JSON.stringify({ type: "welcome" })],
+    ["incoming without a name", JSON.stringify({ type: "incoming" })],
   ])("rejects %s", (_, raw) => {
     expect(parseMessage(raw)).toBeUndefined();
   });

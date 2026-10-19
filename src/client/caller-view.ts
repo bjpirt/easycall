@@ -1,7 +1,7 @@
 import type { Status } from "../shared/protocol";
 import type { CallerEvent, CallerSession } from "./caller-session";
 import { callNotice, type MediaState } from "./call-status";
-import { element, video } from "./dom";
+import { element, nameLabel, video } from "./dom";
 import { keepAwake, type Release } from "./wake-lock";
 
 type Screen =
@@ -12,7 +12,7 @@ type Screen =
 
 type Availability = Status | "connecting" | "reconnecting" | "disconnected";
 
-function statusText(availability: Availability, name: string): string {
+function statusText(availability: Availability, name: string, caller?: string): string {
   switch (availability) {
     case "connecting":
       return "Connecting…";
@@ -23,7 +23,7 @@ function statusText(availability: Availability, name: string): string {
     case "available":
       return `${name} is ready for a call`;
     case "in-call":
-      return `${name} is in a call`;
+      return caller ? `${name} is in a call with ${caller}` : `${name} is in a call`;
     case "disconnected":
       return "Disconnected. Reload the page to try again.";
   }
@@ -37,13 +37,15 @@ function statusText(availability: Availability, name: string): string {
  */
 export function mountCaller(
   root: HTMLElement,
-  /** What the receiver is called, e.g. "Grandma". */
-  displayName: string,
+  /** Your name and the receiver's, e.g. "Ben" and "Grandma". */
+  { name, receiverName }: { name: string; receiverName: string },
   connect: (onEvent: (event: CallerEvent) => void) => CallerSession,
   awake: () => Release = keepAwake,
 ): void {
   let release: Release | undefined;
   let availability: Availability = "connecting";
+  /** Who's in a call with the receiver, if anyone. */
+  let inCallWith: string | undefined;
   let screen: Screen = { screen: "idle" };
   let media: MediaState = "connecting";
   let roomReconnecting = false;
@@ -87,8 +89,11 @@ export function mountCaller(
           render({ screen: "joining" });
           session.join();
         });
-        const elements = [element("p", statusText(availability, displayName)), join];
-        return screen.message ? [...elements, element("p", screen.message)] : elements;
+        const signedIn = element("p", `Signed in as ${name}`);
+        signedIn.className = "signed-in";
+        const elements = [element("p", statusText(availability, receiverName, inCallWith)), join];
+        if (screen.message) elements.push(element("p", screen.message));
+        return [...elements, signedIn];
       }
       case "joining":
         return [element("p", "Starting…")];
@@ -97,6 +102,7 @@ export function mountCaller(
       case "active":
         return [
           video(screen.remote, "remote-view"),
+          nameLabel(receiverName),
           video(screen.camera, "self-view"),
           notice,
           hangUp(),
@@ -117,6 +123,7 @@ export function mountCaller(
     switch (event.type) {
       case "status":
         availability = event.status;
+        inCallWith = event.caller;
         if (screen.screen === "idle") render();
         return;
       case "connection":
