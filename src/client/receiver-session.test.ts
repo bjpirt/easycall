@@ -59,7 +59,7 @@ async function start(): Promise<{ session: ReceiverSession; peer: FakePeer }> {
 /** Starts, is welcomed by the room, and receives the caller's video. */
 async function inCall(): Promise<FakePeer> {
   const { peer } = await start();
-  socket().receive({ type: "welcome", resumed: false });
+  socket().receive({ type: "welcome", resumed: false, version: "test-version" });
   peer.options.onRemoteStream(new MediaStream());
   return peer;
 }
@@ -76,7 +76,7 @@ describe("receiver session", () => {
     await start();
     expect(events).toEqual([]);
 
-    socket().receive({ type: "welcome", resumed: false });
+    socket().receive({ type: "welcome", resumed: false, version: "test-version" });
 
     expect(events).toEqual([
       { type: "connection", state: "connected" },
@@ -84,9 +84,19 @@ describe("receiver session", () => {
     ]);
   });
 
+  it("passes on the version the room is running", async () => {
+    const onVersion = vi.fn();
+    deps.onVersion = onVersion;
+    await start();
+
+    socket().receive({ type: "welcome", resumed: false, version: "v2" });
+
+    expect(onVersion).toHaveBeenCalledWith("v2");
+  });
+
   it("sets up the peer with the call's ICE servers and never starts a call itself", async () => {
     const { peer } = await start();
-    socket().receive({ type: "welcome", resumed: false });
+    socket().receive({ type: "welcome", resumed: false, version: "test-version" });
 
     expect(peer.options.iceServers).toBe(iceServers);
     expect(peer.call).not.toHaveBeenCalled();
@@ -145,7 +155,7 @@ describe("receiver session", () => {
     [{ type: "timeout" }, "No calls just now."],
   ])("goes back to idle on %o", async (message, reason) => {
     const { peer } = await start();
-    socket().receive({ type: "welcome", resumed: false });
+    socket().receive({ type: "welcome", resumed: false, version: "test-version" });
 
     socket().receive(message);
     socket().dispatchEvent(new CloseEvent("close", { code: 4000 })); // the room then disconnects us
@@ -192,7 +202,7 @@ describe("receiver session", () => {
       const peer = await inCall();
       dropAndReconnect();
 
-      socket().receive({ type: "welcome", resumed: true });
+      socket().receive({ type: "welcome", resumed: true, version: "test-version" });
 
       expect(peer.close).not.toHaveBeenCalled();
       expect(events.at(-1)).toEqual({ type: "connection", state: "connected" });
@@ -202,7 +212,7 @@ describe("receiver session", () => {
       await inCall();
       dropAndReconnect();
 
-      socket().receive({ type: "welcome", resumed: false });
+      socket().receive({ type: "welcome", resumed: false, version: "test-version" });
 
       expect(camera.stopped()).toBe(true);
       expect(events.at(-1)).toEqual({ type: "ended", reason: "The call has ended." });
@@ -210,10 +220,10 @@ describe("receiver session", () => {
 
     it("keeps waiting if it wasn't in a call", async () => {
       await start();
-      socket().receive({ type: "welcome", resumed: false });
+      socket().receive({ type: "welcome", resumed: false, version: "test-version" });
       dropAndReconnect();
 
-      socket().receive({ type: "welcome", resumed: false });
+      socket().receive({ type: "welcome", resumed: false, version: "test-version" });
 
       expect(camera.stopped()).toBe(false);
       expect(events.filter((e) => e.type === "waiting")).toHaveLength(1);

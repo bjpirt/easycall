@@ -10,6 +10,8 @@ export interface CallerDeps {
   getIceServers: () => Promise<IceServer[]>;
   connect: () => RoomSocket;
   createPeer: PeerFactory;
+  /** Told the app version the room is running, so an out-of-date page can update. */
+  onVersion?: (version: string) => void;
 }
 
 export type CallerEvent =
@@ -108,6 +110,7 @@ export function connectCaller(
     onMessage: (message) => {
       switch (message.type) {
         case "welcome":
+          deps.onVersion?.(message.version);
           connected = true;
           onEvent({ type: "connection", state: "connected" });
           // Back after a drop. If the room kept our place, the network may have

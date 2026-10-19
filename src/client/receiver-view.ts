@@ -13,13 +13,15 @@ type State =
  * The receiver (tablet) view. Idle shows a "Join call" button for staff;
  * joining turns on the camera and waits. Calls are answered automatically and
  * there's nothing to tap once joined. A notice shows while a call is connecting
- * or reconnecting. The screen is kept awake while waiting and during a call,
- * and Join call goes full screen (the tap is the gesture browsers require).
+ * or reconnecting. While it's in use (from Join call until it's idle again) the
+ * screen is kept awake, and Join call goes full screen (the tap is the gesture
+ * browsers require).
  */
 export function mountReceiver(
   root: HTMLElement,
   start: StartReceiver,
-  awake: () => Release = keepAwake,
+  /** Called when the view comes into use; the result is called when it's idle again. */
+  inUse: () => Release = keepAwake,
   fullscreen: () => void = goFullscreen,
 ): void {
   let release: Release | undefined;
@@ -37,11 +39,11 @@ export function mountReceiver(
     root.className = `call receiver ${state.screen}`;
     root.replaceChildren(...view(state));
     updateNotice();
-    setAwake(state.screen === "waiting" || state.screen === "active");
+    setInUse(state.screen !== "idle");
   };
 
-  const setAwake = (on: boolean): void => {
-    if (on) release ??= awake();
+  const setInUse = (on: boolean): void => {
+    if (on) release ??= inUse();
     else {
       release?.();
       release = undefined;

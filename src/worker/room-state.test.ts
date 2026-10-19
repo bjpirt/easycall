@@ -34,7 +34,8 @@ const statusTo = (to: string, s: string, caller?: string) =>
     to,
     (caller ? { type: "status", status: s, caller } : { type: "status", status: s }) as Message,
   );
-const welcome = (to: string, resumed: boolean) => sendTo(to, { type: "welcome", resumed });
+const welcome = (to: string, resumed: boolean) =>
+  sendTo(to, { type: "welcome", resumed, version: "test-version" });
 const timer = (name: TimerName, running: boolean) => ({ type: "timer", name, running });
 const close = (id: string, reason: string) => ({ type: "close", id, reason });
 
@@ -188,7 +189,7 @@ it("ignores room-only messages sent by clients", () => {
     { type: "joined" },
     { type: "refused" },
     { type: "timeout" },
-    { type: "welcome", resumed: true },
+    { type: "welcome", resumed: true, version: "x" },
   ] as Message[]) {
     expect(receive(before, alice, message).effects).toEqual([]);
   }

@@ -6,11 +6,13 @@ import { login } from "./login";
 import { manifest } from "./manifest";
 import { readSession, sessionCookie } from "./session";
 import { iceServers } from "./turn";
+import { appVersion } from "../shared/version";
 
 export { Room } from "./room";
 
 /**
  * Routes:
+ *   /version                   the deployed app version (public), so open pages can update
  *   /login                     sign in (guarded by Cloudflare Access)
  *   /dev-login                 local sign-in (only when DEV_LOGIN=true)
  *   /<group>/                  the app (same page for every role)
@@ -27,6 +29,9 @@ export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname === "/version") {
+      return Response.json({ version: appVersion }, { headers: noStore });
+    }
     if (url.pathname === "/login") return login(request, env);
     if (url.pathname === "/dev-login" && env.DEV_LOGIN === "true") {
       return devLogin(request, env.SESSION_SECRET);

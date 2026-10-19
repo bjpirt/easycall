@@ -12,8 +12,8 @@ describe("parseMessage", () => {
     { type: "joined" },
     { type: "refused" },
     { type: "timeout" },
-    { type: "welcome", resumed: true },
-    { type: "welcome", resumed: false },
+    { type: "welcome", resumed: true, version: "abc123" },
+    { type: "welcome", resumed: false, version: "abc123" },
     { type: "status", status: "unavailable" },
     { type: "status", status: "available" },
     { type: "status", status: "in-call" },
@@ -40,7 +40,8 @@ describe("parseMessage", () => {
     ["offer without sdp", JSON.stringify({ type: "offer" })],
     ["bad candidate", JSON.stringify({ type: "candidate", candidate: { candidate: 1 } })],
     ["unknown status", JSON.stringify({ type: "status", status: "asleep" })],
-    ["welcome without resumed", JSON.stringify({ type: "welcome" })],
+    ["welcome without resumed", JSON.stringify({ type: "welcome", version: "v" })],
+    ["welcome without a version", JSON.stringify({ type: "welcome", resumed: false })],
     ["incoming without a name", JSON.stringify({ type: "incoming" })],
   ])("rejects %s", (_, raw) => {
     expect(parseMessage(raw)).toBeUndefined();

@@ -9,6 +9,8 @@ export interface ReceiverDeps {
   getIceServers: () => Promise<IceServer[]>;
   connect: () => RoomSocket;
   createPeer: PeerFactory;
+  /** Told the app version the room is running, so an out-of-date page can update. */
+  onVersion?: (version: string) => void;
 }
 
 export type ReceiverEvent =
@@ -86,6 +88,7 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
         onMessage: (message) => {
           switch (message.type) {
             case "welcome":
+              deps.onVersion?.(message.version);
               onEvent({ type: "connection", state: "connected" });
               // Back after a drop, but the room didn't keep our place: the call is over.
               if (inCall && !message.resumed) end("The call has ended.");

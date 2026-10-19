@@ -43,7 +43,7 @@ beforeEach(() => {
     },
   };
   session = connectCaller(deps, (event) => events.push(event));
-  socket().receive({ type: "welcome", resumed: false });
+  socket().receive({ type: "welcome", resumed: false, version: "test-version" });
 });
 
 afterEach(() => {
@@ -74,6 +74,16 @@ describe("caller session", () => {
     expect(deps.connect).toHaveBeenCalled();
     expect(deps.getCamera).not.toHaveBeenCalled();
     expect(events).toEqual([{ type: "connection", state: "connected" }]);
+  });
+
+  it("passes on the version the room is running", () => {
+    const onVersion = vi.fn();
+    sockets = [];
+    connectCaller({ ...deps, onVersion }, (event) => events.push(event));
+
+    socket().receive({ type: "welcome", resumed: false, version: "v2" });
+
+    expect(onVersion).toHaveBeenCalledWith("v2");
   });
 
   it("reports the receiver's availability", () => {
@@ -322,7 +332,7 @@ describe("caller session", () => {
       const peer = await join();
       dropAndReconnect();
 
-      socket().receive({ type: "welcome", resumed: true });
+      socket().receive({ type: "welcome", resumed: true, version: "test-version" });
 
       expect(sockets).toHaveLength(2);
       expect(peer.close).not.toHaveBeenCalled();
@@ -334,7 +344,7 @@ describe("caller session", () => {
       await join();
       dropAndReconnect();
 
-      socket().receive({ type: "welcome", resumed: false });
+      socket().receive({ type: "welcome", resumed: false, version: "test-version" });
 
       expect(camera.stopped()).toBe(true);
       expect(events.at(-1)).toEqual({ type: "call-ended", reason: "The call has ended." });

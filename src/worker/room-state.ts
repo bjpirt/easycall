@@ -1,5 +1,6 @@
 import type { Message, Status } from "../shared/protocol";
 import type { Role } from "../shared/roles";
+import { appVersion } from "../shared/version";
 
 export interface Connection {
   id: string;
@@ -200,7 +201,7 @@ function close(id: string, reason: string): Effect {
 }
 
 function welcome(to: string, resumed: boolean): Effect {
-  return send(to, { type: "welcome", resumed });
+  return send(to, { type: "welcome", resumed, version: appVersion });
 }
 
 function timer(name: TimerName, running: boolean): Effect {

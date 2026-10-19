@@ -19,10 +19,14 @@ const testDirectory = JSON.stringify({
   },
 });
 
+/** The build version (see vite.config.ts), fixed for tests. */
+const define = { __APP_VERSION__: JSON.stringify("test-version") };
+
 export default defineConfig({
   test: {
     projects: [
       {
+        define,
         plugins: [
           cloudflareTest({
             wrangler: { configPath: "./wrangler.jsonc" },
@@ -32,6 +36,7 @@ export default defineConfig({
         test: { name: "worker", include: ["src/worker/**/*.test.ts", "src/shared/**/*.test.ts"] },
       },
       {
+        define,
         test: { name: "client", environment: "happy-dom", include: ["src/client/**/*.test.ts"] },
       },
     ],

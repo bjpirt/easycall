@@ -33,9 +33,13 @@ describe("openRoom", () => {
   it("passes on the room's messages", () => {
     openRoom(connect, handlers);
 
-    latest().receive({ type: "welcome", resumed: false });
+    latest().receive({ type: "welcome", resumed: false, version: "test-version" });
 
-    expect(handlers.onMessage).toHaveBeenCalledWith({ type: "welcome", resumed: false });
+    expect(handlers.onMessage).toHaveBeenCalledWith({
+      type: "welcome",
+      resumed: false,
+      version: "test-version",
+    });
   });
 
   it("sends messages to the room", () => {
@@ -71,7 +75,7 @@ describe("openRoom", () => {
     drop();
     vi.advanceTimersByTime(retryDelays[1] ?? 0);
 
-    latest().receive({ type: "welcome", resumed: true });
+    latest().receive({ type: "welcome", resumed: true, version: "test-version" });
     drop();
     vi.advanceTimersByTime(retryDelays[0] ?? 0);
 

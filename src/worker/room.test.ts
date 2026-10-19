@@ -102,7 +102,10 @@ describe("room", () => {
     const caller = await join("caller");
 
     await vi.waitFor(() => {
-      expect(caller.messages).toEqual([{ type: "welcome", resumed: false }, status("unavailable")]);
+      expect(caller.messages).toEqual([
+        { type: "welcome", resumed: false, version: "test-version" },
+        status("unavailable"),
+      ]);
     });
   });
 
@@ -112,7 +115,7 @@ describe("room", () => {
     const receiver = await join("receiver");
 
     await caller.expectLatest(status("available"));
-    await receiver.expectToReceive({ type: "welcome", resumed: false });
+    await receiver.expectToReceive({ type: "welcome", resumed: false, version: "test-version" });
   });
 
   it("puts a joining caller in the call and tells everyone it's in use", async () => {
@@ -204,7 +207,7 @@ describe("room", () => {
       });
       const back = await join("caller", "alice@x.com");
 
-      await back.expectToReceive({ type: "welcome", resumed: true });
+      await back.expectToReceive({ type: "welcome", resumed: true, version: "test-version" });
       back.send(offer);
       await receiver.expectToReceive(offer);
       expect(receiver.messages).not.toContainEqual({ type: "hangup" });
@@ -233,7 +236,7 @@ describe("room", () => {
       });
       const back = await join("receiver");
 
-      await back.expectToReceive({ type: "welcome", resumed: true });
+      await back.expectToReceive({ type: "welcome", resumed: true, version: "test-version" });
       caller.send(offer);
       await back.expectToReceive(offer);
       expect(caller.messages).not.toContainEqual({ type: "hangup" });
@@ -252,6 +255,41 @@ describe("room", () => {
       await runOut("receiver-away");
 
       await caller.expectLatest(status("unavailable"));
+    });
+  });
+
+  describe("after the room restarts (e.g. a deploy drops every socket)", () => {
+    /** A call in progress whose sockets are all gone, as a restarted room finds it. */
+    async function restartMidCall(): Promise<void> {
+      await runInDurableObject(room, (_, state) => {
+        state.storage.kv.put("state", {
+          receiver: { email: "tablet@x.com", name: "tablet", connection: "gone-r" },
+          callers: ["gone-a"],
+          active: { email: "alice@x.com", name: "alice", connection: "gone-a" },
+        });
+      });
+    }
+
+    it("holds the call: both sides reconnect and carry on", async () => {
+      await restartMidCall();
+
+      const caller = await join("caller", "alice@x.com");
+      const receiver = await join("receiver");
+
+      await caller.expectToReceive({ type: "welcome", resumed: true, version: "test-version" });
+      await receiver.expectToReceive({ type: "welcome", resumed: true, version: "test-version" });
+      caller.send(offer);
+      await receiver.expectToReceive(offer);
+    });
+
+    it("starts their grace periods, so the call ends if they don't come back", async () => {
+      await restartMidCall();
+
+      await join("caller"); // someone else connecting makes the room look at its state
+
+      const running = await timers();
+      expect(running?.["caller-away"]).toBeDefined();
+      expect(running?.["receiver-away"]).toBeDefined();
     });
   });
 

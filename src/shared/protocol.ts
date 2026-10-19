@@ -24,9 +24,10 @@ export type Message =
   | { type: "hangup" }
   /**
    * Room → anyone who connects, first. `resumed` means they've got their place
-   * back after a dropped connection (e.g. they're still in the call).
+   * back after a dropped connection (e.g. they're still in the call). `version`
+   * is the app version now deployed, so an old page knows to update.
    */
-  | { type: "welcome"; resumed: boolean }
+  | { type: "welcome"; resumed: boolean; version: string }
   /** Caller → room: start a call with the receiver. */
   | { type: "join" }
   /** Room → caller: you're in the call; send your offer. */
@@ -66,8 +67,8 @@ export function parseMessage(raw: unknown): Message | undefined {
     case "timeout":
       return { type: value.type };
     case "welcome":
-      return typeof value.resumed === "boolean"
-        ? { type: "welcome", resumed: value.resumed }
+      return typeof value.resumed === "boolean" && typeof value.version === "string"
+        ? { type: "welcome", resumed: value.resumed, version: value.version }
         : undefined;
     case "status":
       if (!isStatus(value.status)) return undefined;

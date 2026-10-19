@@ -33,14 +33,16 @@ function statusText(availability: Availability, name: string, caller?: string): 
  * The caller (family) view. Idle shows the receiver's availability, and "Join
  * call" is only enabled while they're waiting. During a call the receiver fills
  * the screen, with your own camera in the corner, a Hang up button, and a notice
- * while it's connecting or reconnecting. The screen is kept awake during a call.
+ * while it's connecting or reconnecting. While it's in use (from Join call until
+ * the call ends) the screen is kept awake.
  */
 export function mountCaller(
   root: HTMLElement,
   /** Your name and the receiver's, e.g. "Ben" and "Grandma". */
   { name, receiverName }: { name: string; receiverName: string },
   connect: (onEvent: (event: CallerEvent) => void) => CallerSession,
-  awake: () => Release = keepAwake,
+  /** Called when the view comes into use; the result is called when it's idle again. */
+  inUse: () => Release = keepAwake,
 ): void {
   let release: Release | undefined;
   let availability: Availability = "connecting";
@@ -58,11 +60,11 @@ export function mountCaller(
     root.className = `call caller ${screen.screen}`;
     root.replaceChildren(...view());
     updateNotice();
-    setAwake(screen.screen === "calling" || screen.screen === "active");
+    setInUse(screen.screen !== "idle");
   };
 
-  const setAwake = (on: boolean): void => {
-    if (on) release ??= awake();
+  const setInUse = (on: boolean): void => {
+    if (on) release ??= inUse();
     else {
       release?.();
       release = undefined;

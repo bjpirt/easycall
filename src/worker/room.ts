@@ -8,6 +8,7 @@ import {
   expire,
   receive,
   type Connection,
+  type Participant,
   type RoomState,
   type TimerName,
   type Transition,
@@ -42,13 +43,13 @@ export class Room extends DurableObject<Env> {
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server, [connection.id]);
     server.serializeAttachment(connection);
-    await this.apply(connect(this.load(), connection));
+    await this.apply(connect(await this.load(), connection));
     return new Response(null, { status: 101, webSocket: client });
   }
 
   override async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     const message = parseMessage(raw);
-    if (message) await this.apply(receive(this.load(), connectionOf(ws), message));
+    if (message) await this.apply(receive(await this.load(), connectionOf(ws), message));
   }
 
   override async webSocketClose(ws: WebSocket): Promise<void> {
@@ -66,33 +67,51 @@ export class Room extends DurableObject<Env> {
       .sort(([, a], [, b]) => a - b);
     for (const [name] of due) {
       this.setDeadline(name, undefined);
-      await this.apply(expire(this.load(), name));
+      await this.apply(expire(await this.load(), name));
     }
     await this.scheduleAlarm();
   }
 
   private async leave(ws: WebSocket): Promise<void> {
     const connection = connectionOf(ws);
-    await this.apply(disconnect(this.load(connection.id), connection));
+    await this.apply(disconnect(await this.load(connection.id), connection));
   }
 
   /**
-   * The saved state, minus connections that are no longer live (sockets don't
-   * survive a restart). `leaving` is kept so it can be disconnected properly.
-   * Participants who are already away keep their place until their timer runs out.
+   * The saved state, checked against the live sockets. Sockets don't survive the
+   * room restarting (e.g. for a deploy), and no close event arrives for them, so:
+   * callers whose socket has gone are forgotten, and participants whose socket
+   * has gone are treated as away, starting their grace period. They then
+   * reconnect and carry on, and a deploy doesn't end a call. `leaving` is kept so
+   * it can be disconnected properly.
    */
-  private load(leaving?: string): RoomState {
+  private async load(leaving?: string): Promise<RoomState> {
     const live = new Set(this.ctx.getWebSockets().map((ws) => connectionOf(ws).id));
     if (leaving) live.add(leaving);
 
     const saved = this.ctx.storage.kv.get<RoomState>("state") ?? emptyRoom;
-    const keep = <P extends { connection: string | null }>(p: P | null) =>
-      p && (p.connection === null || live.has(p.connection)) ? p : null;
-    return {
-      receiver: keep(saved.receiver),
-      callers: saved.callers.filter((id) => live.has(id)),
-      active: keep(saved.active),
+    const vanished: TimerName[] = [];
+    const check = (p: Participant | null, timer: TimerName): Participant | null => {
+      if (!p?.connection || live.has(p.connection)) return p; // absent, away, or still connected
+      vanished.push(timer);
+      return { ...p, connection: null };
     };
+    const state = {
+      receiver: check(saved.receiver, "receiver-away"),
+      callers: saved.callers.filter((id) => live.has(id)),
+      active: check(saved.active, "caller-away"),
+    };
+
+    if (vanished.length > 0) {
+      const deadlines = this.deadlines();
+      for (const name of vanished) {
+        deadlines[name] ??= Date.now() + timerMs(name, this.env);
+        this.setDeadline(name, deadlines[name]);
+      }
+      this.ctx.storage.kv.put("state", state);
+      await this.scheduleAlarm();
+    }
+    return state;
   }
 
   private async apply({ state, effects }: Transition): Promise<void> {

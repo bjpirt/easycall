@@ -40,6 +40,13 @@ async function connect(
 }
 
 describe("routing", () => {
+  it("tells anyone the deployed version, uncached", async () => {
+    const response = await get("/version");
+
+    expect(await response.json()).toEqual({ version: "test-version" });
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
   it("redirects a group without its trailing slash, keeping the query", async () => {
     const response = await get("/alpha?x=1");
 
@@ -156,7 +163,7 @@ describe("/<group>/api/room", () => {
     const caller = await connect("/beta/api/room", await as("caller@example.com"));
     await vi.waitFor(() => {
       expect(caller.messages).toEqual([
-        { type: "welcome", resumed: false },
+        { type: "welcome", resumed: false, version: "test-version" },
         { type: "status", status: "unavailable" },
       ]);
     });
@@ -165,7 +172,7 @@ describe("/<group>/api/room", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(caller.messages).toEqual([
-      { type: "welcome", resumed: false },
+      { type: "welcome", resumed: false, version: "test-version" },
       { type: "status", status: "unavailable" },
     ]);
     for (const { ws } of [caller, otherGroup]) ws.close();
