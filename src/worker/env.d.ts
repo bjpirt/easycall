@@ -1,7 +1,7 @@
 // Secrets (set with `wrangler secret put`), optional so local dev and tests work
 // without them. Merged into both generated `Env` types in worker-configuration.d.ts.
 interface Secrets {
-  /** Groups (and, from step 14, members) as JSON; see src/worker/directory.ts. */
+  /** Groups and their members, as JSON; see src/worker/directory.ts. */
   DIRECTORY?: string;
   /** Signs session cookies. A long random string; rotating it signs everyone out. */
   SESSION_SECRET?: string;

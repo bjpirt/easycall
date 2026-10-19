@@ -4,6 +4,21 @@ import type { Page } from "./dom";
 export type Release = () => void;
 
 /**
+ * Holds something (e.g. `keepAwake`) while a view is in use: `set(true)` takes
+ * it once, however often it's called, and `set(false)` releases it.
+ */
+export function whileInUse(take: () => Release): (inUse: boolean) => void {
+  let release: Release | undefined;
+  return (inUse) => {
+    if (inUse) release ??= take();
+    else {
+      release?.();
+      release = undefined;
+    }
+  };
+}
+
+/**
  * Keeps the screen on until released (Screen Wake Lock API). Browsers drop the
  * lock whenever the page is hidden (another app, the screen briefly off), so
  * it's taken again when the page is visible. It's a nice-to-have: where it's

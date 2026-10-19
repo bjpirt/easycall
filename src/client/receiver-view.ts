@@ -1,7 +1,7 @@
 import { callNotice, type MediaState } from "./call-status";
-import { element, nameLabel, video } from "./dom";
+import { element, nameLabel, notice as noticeElement, setNotice, video } from "./dom";
 import type { ReceiverEvent, ReceiverSession } from "./receiver-session";
-import { keepAwake, type Release } from "./wake-lock";
+import { keepAwake, whileInUse, type Release } from "./wake-lock";
 
 type State =
   | { screen: "idle"; message?: string }
@@ -25,16 +25,14 @@ export function mountReceiver(
   /** Called when the view comes into use; the result is called when it's idle again. */
   inUse: () => Release = keepAwake,
 ): void {
-  let release: Release | undefined;
+  const setInUse = whileInUse(inUse);
   let session: ReceiverSession | undefined;
   let current: State = { screen: "idle" };
   let media: MediaState = "connecting";
   let roomReconnecting = false;
   /** Who's calling, once a call starts. */
   let caller: string | undefined;
-  /** Updated in place, so the videos aren't rebuilt (which would make them flash). */
-  const notice = element("p");
-  notice.className = "notice";
+  const notice = noticeElement();
 
   const render = (state: State): void => {
     current = state;
@@ -44,18 +42,11 @@ export function mountReceiver(
     setInUse(state.screen !== "idle");
   };
 
-  const setInUse = (on: boolean): void => {
-    if (on) release ??= inUse();
-    else {
-      release?.();
-      release = undefined;
-    }
-  };
-
   const updateNotice = (): void => {
-    const text = current.screen === "active" ? callNotice(media, roomReconnecting) : undefined;
-    notice.textContent = text ?? "";
-    notice.hidden = text === undefined;
+    setNotice(
+      notice,
+      current.screen === "active" ? callNotice(media, roomReconnecting) : undefined,
+    );
   };
 
   const view = (state: State): HTMLElement[] => {

@@ -108,6 +108,7 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 type Member =
+  /** `secret` is the session secret (known to be set), for renewing the cookie. */
   | { type: "member"; email: string; name: string; role: MemberRole; secret: string }
   | { type: "signed-out" }
   | { type: "not-member" };

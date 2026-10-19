@@ -1,8 +1,8 @@
 import type { Status } from "../shared/protocol";
 import type { CallerEvent, CallerSession } from "./caller-session";
 import { callNotice, type MediaState } from "./call-status";
-import { element, nameLabel, video } from "./dom";
-import { keepAwake, type Release } from "./wake-lock";
+import { element, nameLabel, notice as noticeElement, setNotice, video } from "./dom";
+import { keepAwake, whileInUse, type Release } from "./wake-lock";
 
 type Screen =
   | { screen: "idle"; message?: string }
@@ -36,12 +36,12 @@ function statusText(
 }
 
 /**
- * The caller (family) view. Idle shows the receiver's availability, and "Join
- * call" is only enabled while they're waiting (or to get back into our own call
- * after it dropped, e.g. the app was closed and reopened). During a call the receiver fills
- * the screen, with your own camera in the corner, an End Call button, and a notice
- * while it's connecting or reconnecting. While it's in use (from Join Call until
- * the call ends) the screen is kept awake.
+ * The caller (family) view. Idle shows the receiver's availability, with Join
+ * Call enabled only while they're waiting (or Re-join Call, to get back into our
+ * own call after it dropped, e.g. the app was closed and reopened). During a
+ * call the receiver fills the screen, with your own camera in the corner, an
+ * End Call button, and a notice while it's connecting or reconnecting. While
+ * it's in use (from Join Call until the call ends) the screen is kept awake.
  */
 export function mountCaller(
   root: HTMLElement,
@@ -51,7 +51,7 @@ export function mountCaller(
   /** Called when the view comes into use; the result is called when it's idle again. */
   inUse: () => Release = keepAwake,
 ): void {
-  let release: Release | undefined;
+  const setInUse = whileInUse(inUse);
   let availability: Availability = "connecting";
   /** Who's in a call with the receiver, if anyone. */
   let inCallWith: string | undefined;
@@ -60,9 +60,7 @@ export function mountCaller(
   let screen: Screen = { screen: "idle" };
   let media: MediaState = "connecting";
   let roomReconnecting = false;
-  /** Updated in place, so the videos aren't rebuilt (which would make them flash). */
-  const notice = element("p");
-  notice.className = "notice";
+  const notice = noticeElement();
 
   const render = (next: Screen = screen): void => {
     screen = next;
@@ -72,23 +70,9 @@ export function mountCaller(
     setInUse(screen.screen !== "idle");
   };
 
-  const setInUse = (on: boolean): void => {
-    if (on) release ??= inUse();
-    else {
-      release?.();
-      release = undefined;
-    }
-  };
-
   const updateNotice = (): void => {
-    const text =
-      screen.screen === "calling"
-        ? roomReconnecting
-          ? "Reconnecting…"
-          : "Calling…"
-        : callNotice(media, roomReconnecting);
-    notice.textContent = text ?? "";
-    notice.hidden = text === undefined;
+    if (screen.screen !== "calling") setNotice(notice, callNotice(media, roomReconnecting));
+    else setNotice(notice, roomReconnecting ? "Reconnecting…" : "Calling…");
   };
 
   const view = (): HTMLElement[] => {

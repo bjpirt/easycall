@@ -209,8 +209,8 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 
 - [x] 41. Room: one `receiverLeaves(state, tell)` for every way the receiver leaves the room (call ended, staff End Call, ready window, receiver gone, replaced); timers driven by one table of conditions in `finish()`; small tidy-ups (`isActive` / `isReceiver` by connection id)
 - [x] 42. Client plumbing: one `SessionDeps`; shared camera + ICE start-up and media-state tracking for both sessions; consistent names (`ended` / `message` on both sides); fold `signalling.ts` into `room-connection.ts`, `me.ts` / `ice.ts` / `room-url.ts` into `api.ts`, `Page` into `dom.ts`; `connect` built once in `main.ts`
-- [~] 43. Views and tidy-ups: shared in-use and notice helpers for both views; plainer caller notice logic; `/api/me` renews the cookie with `env.SESSION_SECRET` directly; stale comments
-- [ ] 44. (Optional) Caller session as an explicit state union (idle / starting / in a call) instead of loosely related variables
+- [x] 43. Views and tidy-ups: shared in-use (`whileInUse` in `wake-lock.ts`) and notice (`notice` / `setNotice` in `dom.ts`) helpers for both views; plainer caller notice logic; stale comments. (Kept: the member carrying the session secret, which is how TypeScript knows it's set when `/api/me` renews the cookie.)
+- [~] 44. (Optional) Caller session as an explicit state union (idle / starting / in a call) instead of loosely related variables
 
 ### Later stages
 

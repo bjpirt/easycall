@@ -18,6 +18,24 @@ export function video(stream: MediaStream, kind: "self-view" | "remote-view"): H
   return el;
 }
 
+/**
+ * A notice over a call screen ("Connecting…", "Reconnecting…"). Kept and updated
+ * in place with `setNotice`, so the videos around it aren't rebuilt (which would
+ * make them flash).
+ */
+export function notice(): HTMLElement {
+  const el = element("p");
+  el.className = "notice";
+  el.hidden = true;
+  return el;
+}
+
+/** Shows `text` in a notice, or hides it if there's nothing to say. */
+export function setNotice(el: HTMLElement, text: string | undefined): void {
+  el.textContent = text ?? "";
+  el.hidden = text === undefined;
+}
+
 /** A name shown over someone's video, so you can see who's on the call. */
 export function nameLabel(name: string): HTMLElement {
   const el = element("p", name);

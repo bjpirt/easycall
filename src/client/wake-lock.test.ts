@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Page } from "./dom";
-import { keepAwake } from "./wake-lock";
+import { keepAwake, whileInUse } from "./wake-lock";
 
 class FakeLock {
   released = false;
@@ -139,5 +139,24 @@ describe("keepAwake", () => {
     expect(() => {
       release();
     }).not.toThrow();
+  });
+});
+
+describe("whileInUse", () => {
+  it("takes once while in use, and releases when it's not", () => {
+    const release = vi.fn();
+    const take = vi.fn(() => release);
+    const set = whileInUse(take);
+
+    set(true);
+    set(true);
+    expect(take).toHaveBeenCalledTimes(1);
+
+    set(false);
+    set(false);
+    expect(release).toHaveBeenCalledTimes(1);
+
+    set(true);
+    expect(take).toHaveBeenCalledTimes(2);
   });
 });
