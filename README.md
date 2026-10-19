@@ -141,6 +141,29 @@ address: its session then lasts a year and renews whenever the app is opened.
 | Signed in, but "Not found"             | Your email isn't in that group in `DIRECTORY`, or the group name in the URL is wrong. |
 | Video doesn't connect between networks | The TURN secrets aren't set (step 4).                                                 |
 
+### 7. Automatic deploys (optional)
+
+GitHub Actions deploys `main` to Cloudflare whenever the checks pass (`.github/workflows/check.yml`).
+It needs two repository secrets:
+
+1. **Cloudflare API token:** in the Cloudflare dashboard, open **My Profile → API Tokens → Create
+   Token**, use the **Edit Cloudflare Workers** template, set **Account Resources** to your account
+   (and **Zone Resources** to all zones, which the template requires), then create it and copy the
+   token.
+2. **Cloudflare account ID:** shown by `npx wrangler whoami`, or on your account's overview page in
+   the dashboard.
+3. Add both to the GitHub repository (**Settings → Secrets and variables → Actions**), or with the
+   GitHub CLI:
+
+   ```sh
+   gh secret set CLOUDFLARE_API_TOKEN
+   gh secret set CLOUDFLARE_ACCOUNT_ID
+   ```
+
+After that, every push to `main` deploys once the checks pass. To redeploy without a new
+commit, use **Actions → Check and deploy → Run workflow** on `main`. The app's secrets
+(`DIRECTORY` etc.) stay in Cloudflare and aren't affected by deploys.
+
 ## Development
 
 ```sh

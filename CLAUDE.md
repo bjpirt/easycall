@@ -119,7 +119,7 @@ A very simple video-calling system so family can call a family member in care wh
 - **Unit tests:** colocated `*.test.ts`, as two Vitest projects. **worker** (`src/worker`, `src/shared`) runs inside workerd via `@cloudflare/vitest-plugin`; call the Worker with `exports.default.fetch()` from `cloudflare:workers`. These **bypass static-asset routing**, so pages are covered by E2E. **client** (`src/client`) runs in happy-dom; note that happy-dom's `MediaStream` lacks `getTracks()`.
 - **TypeScript projects:** `tsconfig.base.json` (shared strict options); `tsconfig.worker.json` (`src/worker`, `src/shared`, Workers types, no DOM); `tsconfig.client.json` (`src/client`, `src/shared`, DOM + `vite/client`); `tsconfig.e2e.json` (`e2e/` + root config files, DOM + Node types). The root `tsconfig.json` just references them (for editors/ESLint).
 - **E2E (step 3):** Playwright 1.64, Chromium only (matches the tablet), against the **built** app (`npm run build && vite preview`) on port 8788 (started automatically; reused locally if already running, so stop a stale one after changing code). Tests live in `e2e/*.spec.ts`. **Runs in parallel, one group per worker:** the `group` fixture is `e2e-<parallelIndex>`, and the web server's `DIRECTORY` lists `e2e-0` … `e2e-15`. (Before step 13, all tests shared one room and had to run with `workers: 1`.) The web server's readiness URL is `/e2e-0/`, because `/` is a 404. `e2e/config.ts` holds the test server's settings (port, a **random per-run** `SESSION_SECRET` (set once in `playwright.config.ts` as `E2E_SESSION_SECRET` and inherited by the workers), group members `receiver@` / `caller@` / `other-caller@` / `admin@e2e.test`), shared with `playwright.config.ts`. `signIn(page, email)` adds a session cookie minted with the real signing code; the `receiver` / `caller` / `otherCaller` fixture pages are signed in as those users automatically. `e2e/fixtures.ts` provides `receiver` and `caller` pages, each in its own browser context with a fake camera/mic and permissions granted. One-off setup: `npx playwright install chromium`. Chromium is launched with `--allow-loopback-in-peer-connection`: without it, local WebRTC E2E fails on macOS with the firewall in stealth mode, because LAN UDP to the unsigned test browser is dropped (ICE sticks at `checking`).
-- **CI (step 4):** `.github/workflows/check.yml` runs on every push and PR: `npm ci`, installs Chromium, runs `npm run check`, and uploads the Playwright report on failure. Node comes from `.nvmrc`.
+- **CI (step 4) and deploy (step 20):** `.github/workflows/check.yml` ("Check and deploy") runs on every push, PR and manual dispatch. Job `check`: `npm ci`, installs Chromium, runs `npm run check`, and uploads the Playwright report on failure. Job `deploy`: `needs: check`, only on `main` (not PRs), runs `npm run deploy` on a fresh runner (always a clean production build) with the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets. It uses concurrency group `deploy` (no overlapping deploys) and environment `production`. Node comes from `.nvmrc`.
 - Claude's shell also lacks Homebrew on PATH: use `export PATH="/opt/homebrew/bin:$PATH"` for `gh`.
 
 ## Build plan
@@ -171,7 +171,7 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 
 #### E. Going live (rest)
 
-- [ ] 20. Auto-deploy from `main` after CI passes
+- [~] 20. Auto-deploy from `main` after CI passes
 - [ ] 21. Access allow-list sync from the directory on deploy
 
 #### F. Reliability
@@ -223,7 +223,7 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 - **A feature is NEVER complete until all tests, type checks and linting pass.**
 - Keep this file updated with decisions as we make them. It's the project memory.
 - **Step workflow (agreed):** build the step → `npm run check` passes → demo/summary to the owner → **the owner signs it off** → then Claude makes one git commit for that step. Never commit before sign-off. (Exception, agreed: phase D steps 14–18 are committed one by one as each passes `npm run check`, and reviewed together at the end.) Commit straight to `main` (no branches for now).
-- **Version control (agreed):** git, with a commit per signed-off step; a **public** GitHub repo `easycall` (agreed), so never commit personal details, emails, user lists or secrets; GitHub Actions runs `npm run check` on every push. Auto-deploy from `main` added once there's a deploy target.
+- **Version control (agreed):** git, with a commit per signed-off step; a **public** GitHub repo `easycall` (agreed), so never commit personal details, emails, user lists or secrets; GitHub Actions runs `npm run check` on every push. Pushes to `main` auto-deploy once CI passes (step 20).
 
 ## Cloudflare setup (done by the owner)
 
@@ -232,6 +232,7 @@ The step-by-step guide lives in the **README ("Setting up on Cloudflare")**; kee
 - **One-time PIN has to be enabled as an identity provider first** (Zero Trust → Integrations → Identity providers → add One-time PIN), or it isn't offered when creating the Access application.
 - **The AUD tag** is under the application's Configure → Additional settings ("Application Audience (AUD) Tag"; 64 hex characters). The dashboard URL holds the app _ID_ (a UUID), which is different.
 - The Access application must cover **only `/login`**, not the whole Worker.
+- **Auto-deploy (step 20):** a Cloudflare API token from the "Edit Cloudflare Workers" template, plus the account ID, stored as GitHub repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (README step 7).
 - Secrets: `SESSION_SECRET`, `ACCESS_TEAM_DOMAIN` (hostname only), `ACCESS_AUD`, `TURN_KEY_ID`, `TURN_KEY_API_TOKEN`, `DIRECTORY`. Never set `DEV_LOGIN` in production. Deploy only with `npm run deploy`.
 
 ## Environment notes
