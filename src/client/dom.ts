@@ -49,3 +49,31 @@ export interface Page {
   addEventListener: (type: "visibilitychange", listener: () => void) => void;
   removeEventListener: (type: "visibilitychange", listener: () => void) => void;
 }
+
+/**
+ * Stops pinch-zoom on the tablet, where a stray pinch would leave the call
+ * zoomed in and nobody needs to read small text. Chrome honours this (unless
+ * its "Force enable zoom" accessibility setting is on).
+ */
+export function lockZoom(page: Pick<Document, "querySelector"> = document): void {
+  page
+    .querySelector('meta[name="viewport"]')
+    ?.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+    );
+}
+
+/**
+ * Stops pinch-zoom while `root` shows a screen with the `no-zoom` class (the
+ * video screens). The CSS gives those `touch-action: none`; Safari also needs
+ * its own gesture events cancelling, since it ignores `user-scalable=no`.
+ */
+export function blockPinchZoom(
+  root: HTMLElement,
+  page: Pick<Document, "addEventListener"> = document,
+): void {
+  page.addEventListener("gesturestart", (event) => {
+    if (root.classList.contains("no-zoom")) event.preventDefault();
+  });
+}

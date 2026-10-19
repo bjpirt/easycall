@@ -64,7 +64,9 @@ export function mountCaller(
 
   const render = (next: Screen = screen): void => {
     screen = next;
-    root.className = `call caller ${screen.screen}`;
+    // The video screens can't be zoomed (a stray pinch would crop the call); idle can.
+    const zoom = screen.screen === "calling" || screen.screen === "active" ? " no-zoom" : "";
+    root.className = `call caller ${screen.screen}${zoom}`;
     root.replaceChildren(...view());
     updateNotice();
     setInUse(screen.screen !== "idle");

@@ -76,6 +76,7 @@ You need:
   "[Caller A]". It has nothing to tap.
 - Video and sound work both ways within about 10 seconds. "Connecting…" disappears once
   connected.
+- Pinching on the video doesn't zoom it, on either device.
 
 ## 5. A second caller can't join
 

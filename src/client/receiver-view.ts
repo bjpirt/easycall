@@ -36,7 +36,7 @@ export function mountReceiver(
 
   const render = (state: State): void => {
     current = state;
-    root.className = `call receiver ${state.screen}`;
+    root.className = `call receiver no-zoom ${state.screen}`; // nothing to zoom on the tablet
     root.replaceChildren(...view(state));
     updateNotice();
     setInUse(state.screen !== "idle");

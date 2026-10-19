@@ -5,6 +5,11 @@ body {
   font-family: system-ui, sans-serif;
 }
 
+/* No pinch-zoom on the video screens (see blockPinchZoom in dom.ts). Taps still work. */
+.no-zoom {
+  touch-action: none;
+}
+
 .call,
 .message {
   position: fixed;

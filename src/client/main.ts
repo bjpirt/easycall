@@ -1,7 +1,7 @@
 import { roomRole } from "../shared/roles";
 import { connectCaller } from "./caller-session";
 import { mountCaller } from "./caller-view";
-import { element } from "./dom";
+import { blockPinchZoom, element, lockZoom } from "./dom";
 import { fetchIceServers, fetchMe, roomUrl } from "./api";
 import { createPeer } from "./peer";
 import { startReceiver } from "./receiver-session";
@@ -62,7 +62,9 @@ async function start(root: HTMLElement): Promise<void> {
     createPeer,
     onVersion: updates.noteVersion,
   };
+  blockPinchZoom(root);
   if (roomRole(role) === "receiver") {
+    lockZoom();
     mountReceiver(root, (onEvent) => startReceiver(deps, onEvent), inUse);
   } else {
     mountCaller(root, { name, receiverName }, (onEvent) => connectCaller(deps, onEvent), inUse);

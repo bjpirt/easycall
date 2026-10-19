@@ -56,6 +56,19 @@ describe("caller view", () => {
     expect(button("Re-join Call")?.disabled).toBe(false);
   });
 
+  it("can be zoomed while idle, but not on the video screens", () => {
+    expect(root.classList.contains("no-zoom")).toBe(false);
+
+    emit({ type: "calling", camera: new MediaStream() });
+    expect(root.classList.contains("no-zoom")).toBe(true);
+
+    emit({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+    expect(root.classList.contains("no-zoom")).toBe(true);
+
+    emit({ type: "ended" });
+    expect(root.classList.contains("no-zoom")).toBe(false);
+  });
+
   it("Join Call starts joining", () => {
     emit({ type: "status", status: "available" });
 

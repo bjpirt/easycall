@@ -86,6 +86,16 @@ describe("receiver view", () => {
   });
 });
 
+describe("zoom", () => {
+  it("can't be zoomed on any screen", () => {
+    expect(root.classList.contains("no-zoom")).toBe(true);
+
+    join()({ type: "remote", camera: new MediaStream(), remote: new MediaStream() });
+
+    expect(root.classList.contains("no-zoom")).toBe(true);
+  });
+});
+
 describe("call notices", () => {
   const notice = () => root.querySelector<HTMLElement>(".notice");
 
