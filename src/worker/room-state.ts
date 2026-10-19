@@ -51,7 +51,16 @@ export interface RoomState {
  * - `ready`: the receiver is waiting and nobody has called (the ready window).
  * - `receiver-away` / `caller-away`: grace periods for a dropped connection.
  */
-export type TimerName = "ready" | "receiver-away" | "caller-away";
+export const timerNames = ["ready", "receiver-away", "caller-away"] as const;
+
+export type TimerName = (typeof timerNames)[number];
+
+/** When each timer runs. `finish()` starts and stops them as these change. */
+const timerRuns: Record<TimerName, (state: RoomState) => boolean> = {
+  ready: (s) => isWaiting(s),
+  "receiver-away": (s) => s.receiver?.connection === null,
+  "caller-away": (s) => s.active?.connection === null,
+};
 
 export type Effect =
   | { type: "send"; to: string; message: Message }
@@ -92,20 +101,15 @@ export function connect(state: RoomState, { id, role, email, name, page }: Conne
   }
 
   // A different receiver replaces the old one and ends any call.
-  const effects: Effect[] = [welcome(id, false)];
-  const old = state.receiver?.connection;
-  if (old) effects.push(close(old, "Replaced by a newer connection"));
-  if (state.active?.connection) effects.push(send(state.active.connection, { type: "hangup" }));
-  return finish(
-    state,
-    { ...state, receiver: { email, name, connection: id }, active: null },
-    effects,
-  );
+  return finish(state, { ...withoutReceiver(state), receiver: { email, name, connection: id } }, [
+    welcome(id, false),
+    ...leaving(state, { receiver: { reason: "Replaced by a newer connection" }, caller: true }),
+  ]);
 }
 
 export function receive(state: RoomState, from: Connection, message: Message): Transition {
-  const isActive = from.role === "caller" && from.id === state.active?.connection;
-  const isReceiver = from.role === "receiver" && from.id === state.receiver?.connection;
+  const isActive = from.id === state.active?.connection;
+  const isReceiver = from.id === state.receiver?.connection;
 
   switch (message.type) {
     case "join": {
@@ -124,7 +128,9 @@ export function receive(state: RoomState, from: Connection, message: Message): T
 
     case "hangup":
       if (isActive) return endCall(state);
-      return isReceiver ? receiverLeaves(state) : unchanged(state);
+      // Staff tapped End Call: gone straight away, not held as if the connection dropped.
+      if (isReceiver) return receiverLeaves(state, { receiver: { reason: "Left" }, caller: true });
+      return unchanged(state);
 
     case "offer":
     case "answer":
@@ -150,8 +156,8 @@ export function receive(state: RoomState, from: Connection, message: Message): T
 export function disconnect(state: RoomState, { id, role }: Connection): Transition {
   if (role === "caller") {
     const callers = state.callers.filter((c) => c.id !== id);
-    const away = state.active?.connection === id;
-    const active = away && state.active ? { ...state.active, connection: null } : state.active;
+    const active =
+      state.active?.connection === id ? { ...state.active, connection: null } : state.active;
     return finish(state, { ...state, callers, active }, []);
   }
   if (id !== state.receiver?.connection) return unchanged(state); // an already-replaced receiver
@@ -161,52 +167,62 @@ export function disconnect(state: RoomState, { id, role }: Connection): Transiti
 /** A timer ran out. */
 export function expire(state: RoomState, timer: TimerName): Transition {
   switch (timer) {
-    case "ready": {
+    case "ready":
       // Nobody called in time: send the receiver back to idle.
-      if (!isWaiting(state) || !state.receiver) return unchanged(state);
-      const { connection } = state.receiver;
-      const effects = connection
-        ? [
-            send(connection, { type: "timeout" }),
-            close(connection, "No calls within the ready window"),
-          ]
-        : [];
-      return finish(state, { ...state, receiver: null }, effects);
-    }
-    case "receiver-away": {
+      if (!isWaiting(state)) return unchanged(state);
+      return receiverLeaves(state, {
+        receiver: { message: { type: "timeout" }, reason: "No calls within the ready window" },
+      });
+    case "receiver-away":
       // The receiver didn't come back: they're gone, and so is any call.
-      if (state.receiver?.connection !== null) return unchanged(state);
-      const caller = state.active?.connection;
-      const effects = caller ? [send(caller, { type: "hangup" })] : [];
-      return finish(state, { ...state, receiver: null, active: null }, effects);
-    }
+      if (!timerRuns["receiver-away"](state)) return unchanged(state);
+      return receiverLeaves(state, { caller: true });
     case "caller-away":
       // The caller didn't come back: the call is over.
-      return state.active?.connection === null ? endCall(state) : unchanged(state);
+      return timerRuns["caller-away"](state) ? endCall(state) : unchanged(state);
   }
 }
 
-/**
- * The receiver left on purpose (staff tapped End Call while waiting): they're
- * gone straight away, rather than held as if their connection had dropped.
- */
-function receiverLeaves(state: RoomState): Transition {
-  const effects: Effect[] = [];
-  if (state.receiver?.connection) effects.push(close(state.receiver.connection, "Left"));
-  if (state.active?.connection) effects.push(send(state.active.connection, { type: "hangup" }));
-  return finish(state, { ...state, receiver: null, active: null }, effects);
+/** Who to tell when the receiver leaves the room (see `leaving`). */
+interface Tell {
+  /** Tell the receiver (if connected) with `message`, then close their connection with `reason`. */
+  receiver?: { message?: Message; reason: string };
+  /** Tell the caller in the call (if connected) it's over. */
+  caller?: true;
 }
 
 /**
- * The call is over: the receiver is told and leaves the room (back to idle, so
- * staff choose whether to make them available again).
+ * The receiver leaves the room, and with them any call. It's how every session
+ * ends: the call ended, staff tapped End Call, nobody called, or the receiver
+ * didn't come back. The tablet goes back to idle, and staff choose whether to
+ * make it available again.
  */
+function receiverLeaves(state: RoomState, tell: Tell): Transition {
+  return finish(state, withoutReceiver(state), leaving(state, tell));
+}
+
+/** The call is over: the receiver is told, and leaves the room. */
 function endCall(state: RoomState): Transition {
+  return receiverLeaves(state, {
+    receiver: { message: { type: "hangup" }, reason: "The call has ended" },
+  });
+}
+
+function withoutReceiver(state: RoomState): RoomState {
+  return { ...state, receiver: null, active: null };
+}
+
+/** What to send whoever's still connected as the receiver leaves. */
+function leaving(state: RoomState, tell: Tell): Effect[] {
+  const effects: Effect[] = [];
   const receiver = state.receiver?.connection;
-  const effects = receiver
-    ? [send(receiver, { type: "hangup" }), close(receiver, "The call has ended")]
-    : [];
-  return finish(state, { ...state, receiver: null, active: null }, effects);
+  if (receiver && tell.receiver) {
+    if (tell.receiver.message) effects.push(send(receiver, tell.receiver.message));
+    effects.push(close(receiver, tell.receiver.reason));
+  }
+  const caller = state.active?.connection;
+  if (caller && tell.caller) effects.push(send(caller, { type: "hangup" }));
+  return effects;
 }
 
 /** The receiver is there (or briefly away) and nobody has called: the ready window runs. */
@@ -268,17 +284,13 @@ function finish(before: RoomState, after: RoomState, effects: Effect[]): Transit
     }
   }
 
-  // The ready window restarts if a different receiver takes over while waiting.
-  const newReceiver = before.receiver?.email !== after.receiver?.email;
-  if (isWaiting(after) && (!isWaiting(before) || newReceiver)) all.push(timer("ready", true));
-  else if (isWaiting(before) && !isWaiting(after)) all.push(timer("ready", false));
-
-  const away = {
-    "receiver-away": (s: RoomState) => s.receiver !== null && s.receiver.connection === null,
-    "caller-away": (s: RoomState) => s.active !== null && s.active.connection === null,
-  } as const;
-  for (const [name, isAway] of Object.entries(away) as [TimerName, (s: RoomState) => boolean][]) {
-    if (isAway(after) !== isAway(before)) all.push(timer(name, isAway(after)));
+  for (const name of timerNames) {
+    const was = timerRuns[name](before);
+    const is = timerRuns[name](after);
+    // A different receiver taking over while waiting gets a fresh ready window.
+    const restart =
+      name === "ready" && was && is && before.receiver?.email !== after.receiver?.email;
+    if (was !== is || restart) all.push(timer(name, is));
   }
 
   return { state: after, effects: all };
