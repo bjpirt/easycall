@@ -1,8 +1,10 @@
 import type { Locator, Page } from "@playwright/test";
 import { dropConnection, expect, test } from "./fixtures";
 
-async function expectPlaying(video: Locator): Promise<void> {
-  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth)).toBeGreaterThan(0);
+async function expectPlaying(video: Locator, timeout?: number): Promise<void> {
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth), timeout ? { timeout } : {})
+    .toBeGreaterThan(0);
 }
 
 async function startCall(group: string, receiver: Page, caller: Page): Promise<void> {
@@ -67,4 +69,22 @@ test("if the caller doesn't come back, the call ends after the grace period", as
 
   // The test server's grace period is 3 seconds.
   await expect(receiver.getByText("The call has ended.")).toBeVisible({ timeout: 10_000 });
+});
+
+test("the tablet reloads mid-call: staff rejoin and the call recovers by itself", async ({
+  group,
+  receiver,
+  caller,
+}) => {
+  test.setTimeout(60_000);
+  await startCall(group, receiver, caller);
+
+  // Within the grace period, so the room keeps the tablet's place in the call.
+  await receiver.reload();
+  await receiver.getByRole("button", { name: "Join call" }).click();
+
+  // The caller's connection to the old page breaks; it restarts ICE and the new page answers.
+  await expectPlaying(receiver.locator("video.remote-view"), 30_000);
+  await expect(caller.getByRole("button", { name: "Hang up" })).toBeVisible();
+  await expect(caller.getByText("The call has ended.")).toHaveCount(0);
 });

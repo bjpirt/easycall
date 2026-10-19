@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   connectCaller,
+  restartAfterMs,
   type CallerDeps,
   type CallerEvent,
   type CallerSession,
@@ -189,6 +190,50 @@ describe("caller session", () => {
     expect(deps.getCamera).not.toHaveBeenCalled();
   });
 
+  describe("when the media connection breaks", () => {
+    it("restarts it straight away if it failed", async () => {
+      const peer = await join();
+
+      peer.options.onConnectionState?.("failed");
+
+      expect(peer.restart).toHaveBeenCalledTimes(1);
+    });
+
+    it("gives a brief disconnection a chance to recover, then restarts", async () => {
+      const peer = await join();
+      vi.useFakeTimers();
+
+      peer.options.onConnectionState?.("disconnected");
+      vi.advanceTimersByTime(restartAfterMs - 1);
+      expect(peer.restart).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+
+      expect(peer.restart).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't restart if it recovers by itself", async () => {
+      const peer = await join();
+      vi.useFakeTimers();
+
+      peer.options.onConnectionState?.("disconnected");
+      peer.options.onConnectionState?.("connected");
+      vi.advanceTimersByTime(restartAfterMs * 2);
+
+      expect(peer.restart).not.toHaveBeenCalled();
+    });
+
+    it("doesn't restart after hanging up", async () => {
+      const peer = await join();
+      vi.useFakeTimers();
+      peer.options.onConnectionState?.("disconnected");
+
+      session.hangUp();
+      vi.advanceTimersByTime(restartAfterMs * 2);
+
+      expect(peer.restart).not.toHaveBeenCalled();
+    });
+  });
+
   describe("when the connection drops", () => {
     it("reports reconnecting, without ending the call", async () => {
       const peer = await join();
@@ -208,6 +253,7 @@ describe("caller session", () => {
 
       expect(sockets).toHaveLength(2);
       expect(peer.close).not.toHaveBeenCalled();
+      expect(peer.restart).toHaveBeenCalledTimes(1); // the network may have changed
       expect(events.at(-1)).toEqual({ type: "connection", state: "connected" });
     });
 

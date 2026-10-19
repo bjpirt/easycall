@@ -29,6 +29,7 @@ export function fakeCamera(): FakeCamera {
 export interface FakePeer extends Peer {
   options: PeerOptions;
   call: ReturnType<typeof vi.fn<Peer["call"]>>;
+  restart: ReturnType<typeof vi.fn<Peer["restart"]>>;
   handle: ReturnType<typeof vi.fn<Peer["handle"]>>;
   close: ReturnType<typeof vi.fn<Peer["close"]>>;
 }
@@ -37,6 +38,7 @@ export function fakePeer(options: PeerOptions): FakePeer {
   return {
     options,
     call: vi.fn(() => Promise.resolve()),
+    restart: vi.fn(() => Promise.resolve()),
     handle: vi.fn(() => Promise.resolve()),
     close: vi.fn(),
   };

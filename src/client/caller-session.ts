@@ -29,12 +29,17 @@ interface Call {
   peer: Peer;
 }
 
+/** How long a briefly `disconnected` call gets to recover by itself before we restart it. */
+export const restartAfterMs = 3000;
+
 /**
  * The caller's connection to the room, open for as long as the page is (and
  * reconnecting by itself after a drop). It reports the receiver's availability;
  * `join` turns on the camera and asks the room for the call, and the offer goes
  * out once the room says we're in. A dropped connection doesn't end the call:
- * the room holds our place, and media keeps flowing between the devices.
+ * the room holds our place, and media keeps flowing between the devices. If
+ * the media connection itself breaks (e.g. a network change), we find it a new
+ * path with an ICE restart: the caller makes all offers, so the caller recovers.
  */
 export function connectCaller(
   deps: CallerDeps,
@@ -45,8 +50,21 @@ export function connectCaller(
   let call: Call | undefined;
   /** Set while the camera is starting, so a hang-up can cancel the join. */
   let pending: { cancelled: boolean } | undefined;
+  let restartTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const restart = (): void => {
+    clearTimeout(restartTimer);
+    call?.peer.restart().catch(console.error);
+  };
+
+  const onConnectionState = (state: RTCPeerConnectionState): void => {
+    clearTimeout(restartTimer);
+    if (state === "failed") restart();
+    else if (state === "disconnected") restartTimer = setTimeout(restart, restartAfterMs);
+  };
 
   const endCall = (reason?: string): void => {
+    clearTimeout(restartTimer);
     if (!call) return;
     call.peer.close();
     stopCamera(call.camera);
@@ -60,8 +78,10 @@ export function connectCaller(
         case "welcome":
           connected = true;
           onEvent({ type: "connection", state: "connected" });
-          // Back after a drop, but the room didn't keep our place: the call is over.
-          if (!message.resumed) endCall("The call has ended.");
+          // Back after a drop. If the room kept our place, the network may have
+          // changed, so find the call a fresh path; if not, the call is over.
+          if (message.resumed) restart();
+          else endCall("The call has ended.");
           return;
         case "status":
           status = message.status;
@@ -126,6 +146,7 @@ export function connectCaller(
       onRemoteStream: (remote) => {
         onEvent({ type: "remote", camera, remote });
       },
+      onConnectionState,
     });
     call = { camera, peer };
     onEvent({ type: "calling", camera });

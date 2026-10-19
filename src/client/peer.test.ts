@@ -11,7 +11,10 @@ class FakeConnection extends EventTarget {
 
   addTrack = vi.fn();
   close = vi.fn();
-  createOffer = vi.fn(() => Promise.resolve({ type: "offer", sdp: "OFFER" }));
+  createOffer = vi.fn<(options?: RTCOfferOptions) => Promise<RTCSessionDescriptionInit>>(() =>
+    Promise.resolve({ type: "offer", sdp: "OFFER" }),
+  );
+  connectionState: RTCPeerConnectionState = "new";
   createAnswer = vi.fn(() => Promise.resolve({ type: "answer", sdp: "ANSWER" }));
   setLocalDescription = vi.fn((d: RTCSessionDescriptionInit) => {
     this.log.push(`local:${d.type}`);
@@ -32,12 +35,19 @@ function setup() {
   const connection = new FakeConnection();
   const sent: Signal[] = [];
   const onRemoteStream = vi.fn();
+  const onConnectionState = vi.fn();
   const camera = fakeCamera();
   const peer = createPeer(
-    { localStream: camera, iceServers: [], send: (s) => sent.push(s), onRemoteStream },
+    {
+      localStream: camera,
+      iceServers: [],
+      send: (s) => sent.push(s),
+      onRemoteStream,
+      onConnectionState,
+    },
     connection as unknown as RTCPeerConnection,
   );
-  return { connection, sent, onRemoteStream, camera, peer };
+  return { connection, sent, onRemoteStream, onConnectionState, camera, peer };
 }
 
 const candidate = (c: string): Signal => ({
@@ -59,6 +69,24 @@ describe("createPeer", () => {
 
     expect(connection.log).toEqual(["local:offer"]);
     expect(sent).toEqual([{ type: "offer", sdp: "OFFER" }]);
+  });
+
+  it("restart() sends an ICE-restart offer", async () => {
+    const { connection, sent, peer } = setup();
+
+    await peer.restart();
+
+    expect(connection.createOffer).toHaveBeenCalledWith({ iceRestart: true });
+    expect(sent).toEqual([{ type: "offer", sdp: "OFFER" }]);
+  });
+
+  it("reports connection state changes", () => {
+    const { connection, onConnectionState } = setup();
+
+    connection.connectionState = "failed";
+    connection.dispatchEvent(new Event("connectionstatechange"));
+
+    expect(onConnectionState).toHaveBeenCalledWith("failed");
   });
 
   it("answers an offer", async () => {
