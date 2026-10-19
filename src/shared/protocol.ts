@@ -36,10 +36,18 @@ export type Message =
   | { type: "refused" }
   /** Room → receiver: nobody called within the ready window, so you've been disconnected. */
   | { type: "timeout" }
-  /** Room → callers: the receiver's availability (and, during a call, who's calling). */
-  | { type: "status"; status: Status; caller?: string }
-  /** Room → receiver: who's calling, when a call starts. */
-  | { type: "incoming"; name: string };
+  /**
+   * Room → callers: the receiver's availability. During a call, `caller` is
+   * who's in it, and `rejoin` means it's your call, dropped (e.g. you closed the
+   * app), and you can join it again.
+   */
+  | { type: "status"; status: Status; caller?: string; rejoin?: true }
+  /**
+   * Room → receiver: who's calling, when a call starts (or the receiver
+   * reconnects mid-call). A different `call` means a new connection from the
+   * caller, needing a fresh peer connection.
+   */
+  | { type: "incoming"; name: string; call: string };
 
 /** Parses a raw WebSocket message, returning `undefined` if it isn't valid. */
 export function parseMessage(raw: unknown): Message | undefined {
@@ -70,13 +78,17 @@ export function parseMessage(raw: unknown): Message | undefined {
       return typeof value.resumed === "boolean" && typeof value.version === "string"
         ? { type: "welcome", resumed: value.resumed, version: value.version }
         : undefined;
-    case "status":
+    case "status": {
       if (!isStatus(value.status)) return undefined;
-      return typeof value.caller === "string"
-        ? { type: "status", status: value.status, caller: value.caller }
-        : { type: "status", status: value.status };
+      const status = { type: "status", status: value.status } as const;
+      if (typeof value.caller !== "string") return status;
+      const inCall = { ...status, caller: value.caller };
+      return value.rejoin === true ? { ...inCall, rejoin: true } : inCall;
+    }
     case "incoming":
-      return typeof value.name === "string" ? { type: "incoming", name: value.name } : undefined;
+      return typeof value.name === "string" && typeof value.call === "string"
+        ? { type: "incoming", name: value.name, call: value.call }
+        : undefined;
     default:
       return undefined;
   }

@@ -49,6 +49,13 @@ describe("caller view", () => {
     },
   );
 
+  it("offers to rejoin our own call after it dropped (e.g. the app was reopened)", () => {
+    emit({ type: "status", status: "in-call", caller: "Ben", rejoin: true });
+
+    expect(root.textContent).toContain("Your call with Grandma is still going");
+    expect(button("Join call")?.disabled).toBe(false);
+  });
+
   it("Join call starts joining", () => {
     emit({ type: "status", status: "available" });
 

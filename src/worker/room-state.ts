@@ -9,6 +9,11 @@ export interface Connection {
   email: string;
   /** Their name in the group (from the directory), shown to the others. */
   name: string;
+  /**
+   * The browser page (random per page load), so a page reconnecting can be told
+   * apart from another page signed in as the same person.
+   */
+  page: string;
 }
 
 /**
@@ -22,12 +27,24 @@ export interface Participant {
   connection: string | null;
 }
 
+/** The caller in the call: also which page they're on, and the call (for the receiver). */
+export interface ActiveCaller extends Participant {
+  page: string;
+  /** Identifies this call (the connection that joined it), so the receiver can spot a new one. */
+  call: string;
+}
+
+/** A connected caller, in the call or not. */
+export interface Caller {
+  id: string;
+  email: string;
+}
+
 export interface RoomState {
   receiver: Participant | null;
-  /** Connected callers (connection ids), in the call or not. */
-  callers: string[];
+  callers: Caller[];
   /** The caller in a call with the receiver. */
-  active: Participant | null;
+  active: ActiveCaller | null;
 }
 
 /**
@@ -54,13 +71,15 @@ export function status(state: RoomState): Status {
   return state.active === null ? "available" : "in-call";
 }
 
-export function connect(state: RoomState, { id, role, email, name }: Connection): Transition {
+export function connect(state: RoomState, { id, role, email, name, page }: Connection): Transition {
   if (role === "caller") {
-    const callers = [...state.callers, id];
-    const resumes = state.active?.email === email && state.active.connection === null;
-    const active = resumes ? { email, name, connection: id } : state.active;
-    const next = { ...state, callers, active };
-    return finish(state, next, [welcome(id, resumes), send(id, statusMessage(next))]);
+    // Only the same page gets its place back. Another page (e.g. the app reopened)
+    // can rejoin the call with Join call instead.
+    const away = state.active?.connection === null ? state.active : null;
+    const resumes = away?.email === email && away.page === page;
+    const active = resumes ? { ...away, connection: id } : state.active;
+    const next = { ...state, callers: [...state.callers, { id, email }], active };
+    return finish(state, next, [welcome(id, resumes), send(id, statusMessage(next, email))]);
   }
 
   if (state.receiver?.email === email) {
@@ -68,7 +87,7 @@ export function connect(state: RoomState, { id, role, email, name }: Connection)
     const old = state.receiver.connection;
     const effects: Effect[] = [welcome(id, true)];
     if (old !== null) effects.push(close(old, "Replaced by a newer connection"));
-    if (state.active) effects.push(send(id, { type: "incoming", name: state.active.name }));
+    if (state.active) effects.push(send(id, incoming(state.active)));
     return finish(state, { ...state, receiver: { email, name, connection: id } }, effects);
   }
 
@@ -89,20 +108,19 @@ export function receive(state: RoomState, from: Connection, message: Message): T
   const isReceiver = from.role === "receiver" && from.id === state.receiver?.connection;
 
   switch (message.type) {
-    case "join":
+    case "join": {
       if (from.role !== "caller" || isActive) return unchanged(state);
-      if (!state.receiver?.connection || state.active !== null) {
+      if (!state.receiver?.connection || (state.active !== null && !canRejoin(state, from.email))) {
         // Only one caller at a time, and only while the receiver is connected.
         return { state, effects: [send(from.id, { type: "refused" })] };
       }
-      return finish(
-        state,
-        { ...state, active: { email: from.email, name: from.name, connection: from.id } },
-        [
-          send(from.id, { type: "joined" }),
-          send(state.receiver.connection, { type: "incoming", name: from.name }),
-        ],
-      );
+      const { email, name, id, page } = from;
+      const active = { email, name, connection: id, page, call: id };
+      return finish(state, { ...state, active }, [
+        send(from.id, { type: "joined" }),
+        send(state.receiver.connection, incoming(active)),
+      ]);
+    }
 
     case "hangup":
       return isActive ? endCall(state) : unchanged(state);
@@ -130,7 +148,7 @@ export function receive(state: RoomState, from: Connection, message: Message): T
  */
 export function disconnect(state: RoomState, { id, role }: Connection): Transition {
   if (role === "caller") {
-    const callers = state.callers.filter((c) => c !== id);
+    const callers = state.callers.filter((c) => c.id !== id);
     const away = state.active?.connection === id;
     const active = away && state.active ? { ...state.active, connection: null } : state.active;
     return finish(state, { ...state, callers, active }, []);
@@ -184,12 +202,22 @@ function isWaiting(state: RoomState): boolean {
   return state.receiver !== null && state.active === null;
 }
 
-/** The status message callers see, naming the caller during a call. */
-function statusMessage(state: RoomState): Message {
+/** Whether `email` can join the call in place of the caller, who's away (e.g. the app was reopened). */
+function canRejoin(state: RoomState, email: string): boolean {
+  return state.active?.connection === null && state.active.email === email;
+}
+
+/** The status a caller sees: during a call, who's in it, and whether it's theirs to rejoin. */
+function statusMessage(state: RoomState, email: string): Message {
   const now = status(state);
-  return now === "in-call" && state.active
-    ? { type: "status", status: now, caller: state.active.name }
-    : { type: "status", status: now };
+  if (now !== "in-call" || !state.active) return { type: "status", status: now };
+  const message = { type: "status", status: now, caller: state.active.name } as const;
+  return canRejoin(state, email) ? { ...message, rejoin: true } : message;
+}
+
+/** Tells the receiver who's calling, and which call it is. */
+function incoming({ name, call }: ActiveCaller): Message {
+  return { type: "incoming", name, call };
 }
 
 function send(to: string, message: Message): Effect {
@@ -213,16 +241,19 @@ function unchanged(state: RoomState): Transition {
 }
 
 /**
- * Adds the knock-on effects of a change: a status update for every caller if
- * the status changed, and starting or stopping timers as their conditions
- * begin or end.
+ * Adds the knock-on effects of a change: a status update for each caller whose
+ * status changed, and starting or stopping timers as their conditions begin or
+ * end.
  */
 function finish(before: RoomState, after: RoomState, effects: Effect[]): Transition {
   const all = [...effects];
 
-  if (status(after) !== status(before)) {
-    const message = statusMessage(after);
-    all.push(...after.callers.map((id) => send(id, message)));
+  for (const { id, email } of after.callers) {
+    if (!before.callers.some((c) => c.id === id)) continue; // told when they connected
+    const message = statusMessage(after, email);
+    if (JSON.stringify(message) !== JSON.stringify(statusMessage(before, email))) {
+      all.push(send(id, message));
+    }
   }
 
   // The ready window restarts if a different receiver takes over while waiting.

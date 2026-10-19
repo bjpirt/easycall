@@ -59,11 +59,18 @@ function upgrade(query: string): Promise<Response> {
   return room.fetch(`http://room/?${query}`, { headers: { Upgrade: "websocket" } });
 }
 
-/** Connects as the receiver (tablet@) or a caller (a fresh email unless given). */
-async function join(role: "receiver" | "caller", email?: string): Promise<Client> {
+/**
+ * Connects as the receiver (tablet@) or a caller (a fresh email unless given),
+ * from a page (a fresh one unless given).
+ */
+async function join(
+  role: "receiver" | "caller",
+  email?: string,
+  page: string = crypto.randomUUID(),
+): Promise<Client> {
   const who = email ?? (role === "receiver" ? "tablet@x.com" : `${crypto.randomUUID()}@x.com`);
   const name = who.split("@")[0] ?? "";
-  const { webSocket } = await upgrade(`role=${role}&email=${who}&name=${name}`);
+  const { webSocket } = await upgrade(`role=${role}&email=${who}&name=${name}&page=${page}`);
   if (!webSocket) throw new Error("No WebSocket");
   webSocket.accept();
   open.push(webSocket);
@@ -90,7 +97,7 @@ const answer: Message = { type: "answer", sdp: "ANSWER" };
 /** A receiver plus a caller (alice@) who has joined the call. */
 async function inCall(): Promise<{ receiver: Client; caller: Client }> {
   const receiver = await join("receiver");
-  const caller = await join("caller", "alice@x.com");
+  const caller = await join("caller", "alice@x.com", "alice-page");
   await caller.expectToReceive(status("available"));
   caller.send({ type: "join" });
   await caller.expectToReceive({ type: "joined" });
@@ -128,7 +135,11 @@ describe("room", () => {
   it("tells the receiver who's calling", async () => {
     const { receiver } = await inCall();
 
-    await receiver.expectToReceive({ type: "incoming", name: "alice" });
+    await vi.waitFor(() => {
+      expect(receiver.messages).toContainEqual(
+        expect.objectContaining({ type: "incoming", name: "alice" }),
+      );
+    });
   });
 
   it("relays signals between the receiver and the caller in the call", async () => {
@@ -205,12 +216,38 @@ describe("room", () => {
       await vi.waitFor(async () => {
         expect((await timers())?.["caller-away"]).toBeDefined();
       });
-      const back = await join("caller", "alice@x.com");
+      const back = await join("caller", "alice@x.com", "alice-page");
 
       await back.expectToReceive({ type: "welcome", resumed: true, version: "test-version" });
       back.send(offer);
       await receiver.expectToReceive(offer);
       expect(receiver.messages).not.toContainEqual({ type: "hangup" });
+      expect((await timers())?.["caller-away"]).toBeUndefined();
+    });
+
+    it("lets the caller rejoin from a new page (e.g. the app reopened)", async () => {
+      const { receiver, caller } = await inCall();
+      caller.ws.close();
+      await vi.waitFor(async () => {
+        expect((await timers())?.["caller-away"]).toBeDefined();
+      });
+
+      const reopened = await join("caller", "alice@x.com", "new-page");
+      await reopened.expectToReceive({ type: "welcome", resumed: false, version: "test-version" });
+      await reopened.expectToReceive({
+        type: "status",
+        status: "in-call",
+        caller: "alice",
+        rejoin: true,
+      });
+      reopened.send({ type: "join" });
+
+      await reopened.expectToReceive({ type: "joined" });
+      await vi.waitFor(() => {
+        expect(receiver.messages.filter((m) => m.type === "incoming")).toHaveLength(2);
+      });
+      reopened.send(offer);
+      await receiver.expectToReceive(offer);
       expect((await timers())?.["caller-away"]).toBeUndefined();
     });
 
@@ -264,8 +301,14 @@ describe("room", () => {
       await runInDurableObject(room, (_, state) => {
         state.storage.kv.put("state", {
           receiver: { email: "tablet@x.com", name: "tablet", connection: "gone-r" },
-          callers: ["gone-a"],
-          active: { email: "alice@x.com", name: "alice", connection: "gone-a" },
+          callers: [{ id: "gone-a", email: "alice@x.com" }],
+          active: {
+            email: "alice@x.com",
+            name: "alice",
+            connection: "gone-a",
+            page: "alice-page",
+            call: "gone-a",
+          },
         });
       });
     }
@@ -273,7 +316,7 @@ describe("room", () => {
     it("holds the call: both sides reconnect and carry on", async () => {
       await restartMidCall();
 
-      const caller = await join("caller", "alice@x.com");
+      const caller = await join("caller", "alice@x.com", "alice-page");
       const receiver = await join("receiver");
 
       await caller.expectToReceive({ type: "welcome", resumed: true, version: "test-version" });

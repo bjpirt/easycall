@@ -15,8 +15,11 @@ export interface CallerDeps {
 }
 
 export type CallerEvent =
-  /** The receiver's availability; `caller` is who's in the call, if anyone. */
-  | { type: "status"; status: Status; caller?: string }
+  /**
+   * The receiver's availability; `caller` is who's in the call, if anyone, and
+   * `rejoin` means it's our call, dropped, and we can join it again.
+   */
+  | { type: "status"; status: Status; caller?: string; rejoin?: true }
   | { type: "calling"; camera: MediaStream }
   | { type: "remote"; camera: MediaStream; remote: MediaStream }
   /** The call's media connection (see `MediaState`). */

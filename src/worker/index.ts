@@ -90,12 +90,14 @@ export default {
         return Response.json({ iceServers: await iceServers(env) }, { headers: noStore });
       case "/api/room": {
         // The room trusts these: the role and name come from the directory and the
-        // email from the session, never from the browser.
+        // email from the session, never from the browser. Only the page id (which
+        // tells apart pages signed in as the same person) comes from the browser.
         const target = new URL(request.url);
         target.search = new URLSearchParams({
           role: roomRole(member.role),
           email: member.email,
           name: member.name,
+          page: url.searchParams.get("page") ?? "",
         }).toString();
         return env.ROOM.getByName(group.slug).fetch(new Request(target, request));
       }

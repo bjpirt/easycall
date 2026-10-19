@@ -26,7 +26,11 @@ type Deadlines = Partial<Record<TimerName, number>>;
  * connections survive the object being evicted from memory.
  */
 export class Room extends DurableObject<Env> {
-  /** Only the Worker can reach a DO, so `role`, `email` and `name` come from the directory and session. */
+  /**
+   * Only the Worker can reach a DO, so `role`, `email` and `name` come from the
+   * directory and session. `page` comes from the browser; it only ever tells
+   * apart pages signed in as the same person.
+   */
   override async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
@@ -39,7 +43,15 @@ export class Room extends DurableObject<Env> {
       return new Response("Unknown role, email or name", { status: 400 });
     }
 
-    const connection: Connection = { id: crypto.randomUUID(), role, email, name };
+    const id = crypto.randomUUID();
+    const page = params.get("page") ?? "";
+    const connection: Connection = {
+      id,
+      role,
+      email,
+      name,
+      page: /^[\w-]{1,64}$/.test(page) ? page : id, // without one, it can never resume
+    };
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server, [connection.id]);
     server.serializeAttachment(connection);
@@ -91,14 +103,14 @@ export class Room extends DurableObject<Env> {
 
     const saved = this.ctx.storage.kv.get<RoomState>("state") ?? emptyRoom;
     const vanished: TimerName[] = [];
-    const check = (p: Participant | null, timer: TimerName): Participant | null => {
+    const check = <P extends Participant>(p: P | null, timer: TimerName): P | null => {
       if (!p?.connection || live.has(p.connection)) return p; // absent, away, or still connected
       vanished.push(timer);
       return { ...p, connection: null };
     };
     const state = {
       receiver: check(saved.receiver, "receiver-away"),
-      callers: saved.callers.filter((id) => live.has(id)),
+      callers: saved.callers.filter((c) => live.has(c.id)),
       active: check(saved.active, "caller-away"),
     };
 

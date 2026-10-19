@@ -102,7 +102,19 @@ and tap **Join call**.
 **Expect:** The call comes back by itself within about 15 seconds, without Caller A doing
 anything.
 
-## 9. Hang up
+## 9. Reopen the app during a call
+
+**Do:** On Caller A, close the app or browser tab without hanging up, open the group URL again
+within 30 seconds, and tap **Join call**.
+
+**Expect:**
+
+- After reopening, Caller A shows "Your call with [Receiver] is still going", with **Join call**
+  enabled.
+- After tapping it, the call comes back on both devices within about 15 seconds. The receiver
+  device doesn't go back to "The call has ended."
+
+## 10. Hang up
 
 **Do:** On Caller A, tap **Hang up**.
 
@@ -113,7 +125,7 @@ anything.
 - Caller A goes back to its starting screen, and shows "[Receiver] isn't available right now".
 - Caller B also shows "[Receiver] isn't available right now".
 
-## 10. A caller who disappears
+## 11. A caller who disappears
 
 **Do:**
 
@@ -124,7 +136,7 @@ anything.
 **Expect:** About 30 seconds later, the receiver device shows "The call has ended." with the
 **Join call** button.
 
-## 11. Nobody calls
+## 12. Nobody calls
 
 **Do:** On the receiver device, tap **Join call**, and let nobody call for 30 minutes (the ready
 window).
@@ -136,14 +148,14 @@ window).
 - Callers show "[Receiver] isn't available right now".
 - Afterwards, the receiver device's screen dims and sleeps as normal.
 
-## 12. Someone who isn't in the group
+## 13. Someone who isn't in the group
 
 **Do:** On any device, sign in with an email that's allowed by Access but isn't in this group, and
 open the group URL.
 
 **Expect:** A "Not found" page. Nothing about the group is shown.
 
-## 13. Updates arrive by themselves (optional)
+## 14. Updates arrive by themselves (optional)
 
 **Do:** Leave the receiver device on its idle screen, deploy a new version, and wait 10 minutes.
 

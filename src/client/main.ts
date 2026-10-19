@@ -17,6 +17,9 @@ if (!root) throw new Error("Missing #app");
 
 const updates = watchForUpdates();
 
+/** This page load, so the room can tell it apart from other pages signed in as us. */
+const pageId = crypto.randomUUID();
+
 /** While a view is in use, keep the screen awake and hold off updating the page. */
 function inUse(): Release {
   updates.busy();
@@ -62,14 +65,15 @@ async function start(root: HTMLElement): Promise<void> {
   if (roomRole(role) === "receiver") {
     mountReceiver(
       root,
-      receiverStarter({ ...deps, connect: () => new WebSocket(roomUrl(page)) }),
+      receiverStarter({ ...deps, connect: () => new WebSocket(roomUrl(page, pageId)) }),
       inUse,
     );
   } else {
     mountCaller(
       root,
       { name, receiverName },
-      (onEvent) => connectCaller({ ...deps, connect: () => new WebSocket(roomUrl(page)) }, onEvent),
+      (onEvent) =>
+        connectCaller({ ...deps, connect: () => new WebSocket(roomUrl(page, pageId)) }, onEvent),
       inUse,
     );
   }

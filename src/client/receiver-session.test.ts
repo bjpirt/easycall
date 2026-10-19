@@ -124,9 +124,24 @@ describe("receiver session", () => {
   it("reports who's calling", async () => {
     await start();
 
-    socket().receive({ type: "incoming", name: "Ben" });
+    socket().receive({ type: "incoming", name: "Ben", call: "c1" });
 
     expect(events).toEqual([{ type: "incoming", name: "Ben" }]);
+  });
+
+  it("answers a new call (the caller rejoined from a new page) with a fresh peer", async () => {
+    const { peer } = await start();
+    socket().receive({ type: "incoming", name: "Ben", call: "c1" });
+    socket().receive({ type: "incoming", name: "Ben", call: "c1" }); // e.g. after reconnecting
+    expect(peers).toHaveLength(1);
+
+    socket().receive({ type: "incoming", name: "Ben", call: "c2" });
+    socket().receive({ type: "offer", sdp: "OFFER" });
+
+    expect(peer.close).toHaveBeenCalled();
+    expect(peers).toHaveLength(2);
+    expect(peers[1]?.handle).toHaveBeenCalledWith({ type: "offer", sdp: "OFFER" });
+    expect(camera.stopped()).toBe(false);
   });
 
   it("reports the caller's video", async () => {

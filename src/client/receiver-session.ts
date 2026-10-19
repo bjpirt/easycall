@@ -1,6 +1,6 @@
 import type { IceServer } from "../shared/ice";
 import { mediaState, type MediaState } from "./call-status";
-import type { PeerFactory } from "./peer";
+import type { Peer, PeerFactory } from "./peer";
 import { openRoom, type RoomConnection } from "./room-connection";
 import { stopCamera, type RoomSocket } from "./signalling";
 
@@ -68,22 +68,26 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
       let inCall = false;
       let welcomed = false;
       let connectedBefore = false;
-      const peer = deps.createPeer({
-        localStream: camera,
-        iceServers,
-        send: (signal) => {
-          room.send(signal);
-        },
-        onRemoteStream: (remote) => {
-          inCall = true;
-          onEvent({ type: "remote", camera, remote });
-        },
-        onConnectionState: (state) => {
-          const media = mediaState(state, connectedBefore);
-          if (media === "connected") connectedBefore = true;
-          if (media) onEvent({ type: "media", state: media });
-        },
-      });
+      /** The call we're answering, once one has started. */
+      let call: string | undefined;
+      const newPeer = (): Peer =>
+        deps.createPeer({
+          localStream: camera,
+          iceServers,
+          send: (signal) => {
+            room.send(signal);
+          },
+          onRemoteStream: (remote) => {
+            inCall = true;
+            onEvent({ type: "remote", camera, remote });
+          },
+          onConnectionState: (state) => {
+            const media = mediaState(state, connectedBefore);
+            if (media === "connected") connectedBefore = true;
+            if (media) onEvent({ type: "media", state: media });
+          },
+        });
+      let peer = newPeer();
       const room: RoomConnection = openRoom(deps.connect, {
         onMessage: (message) => {
           switch (message.type) {
@@ -101,7 +105,13 @@ export function receiverStarter(deps: ReceiverDeps): StartReceiver {
               peer.handle(message).catch(console.error);
               return;
             case "incoming":
-              onEvent(message);
+              // A different call: the caller rejoined from a new page, so start afresh.
+              if (call !== undefined && call !== message.call) {
+                peer.close();
+                peer = newPeer();
+              }
+              call = message.call;
+              onEvent({ type: "incoming", name: message.name });
               return;
             case "hangup":
               end("The call has ended.");
