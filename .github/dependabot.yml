@@ -1,0 +1,16 @@
+# Weekly pull requests for outdated or vulnerable dependencies. Each one runs
+# the full check in CI before it can be merged.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # One pull request for all the development tools, so they stay in step.
+      dev-dependencies:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
