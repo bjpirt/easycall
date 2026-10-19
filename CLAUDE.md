@@ -198,7 +198,7 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 - [x] 34. Automatic updates: devices always pick up the latest deploy
 - [~] 35. Real-tablet trial: care home Wi-Fi/device checks; handover notes. The acceptance tests are in **`docs/manual-tests.md`**: generic and runnable by anyone, a "Before you start" list, then 14 numbered tests that build on each other, each with **Do** and **Expect**. Record results in its Results table. Keep it in step with user-facing changes
 - [x] 36. Home page: `/` explains easyCall with a big Sign in button; once signed in you go straight to your group. Each person is in at most one group (enforced by the directory)
-- [~] 37. Rejoin after reopening: a caller who closes the app mid-call (without hanging up) and reopens it within the grace period can press Join call to get back into the call. Reconnecting pages are matched by a per-page id, so another device signed in as the same caller can never take over the call
+- [x] 37. Rejoin after reopening: a caller who closes the app mid-call (without hanging up) and reopens it within the grace period can press Join call to get back into the call. Reconnecting pages are matched by a per-page id, so another device signed in as the same caller can never take over the call
 
 ### Later stages
 
