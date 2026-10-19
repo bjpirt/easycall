@@ -10,6 +10,11 @@ updates:
       # One pull request for all the development tools, so they stay in step.
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # TypeScript 7 is the native (Go) rewrite, and typescript-eslint doesn't
+      # support it yet. Remove this once it does, and upgrade both together.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
