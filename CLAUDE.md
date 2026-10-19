@@ -8,7 +8,7 @@ A very simple video-calling system so family can call a family member in care wh
 
 1. Care home staff open the app on the receiver's Android tablet (already set up with a simple launcher). The tablet runs **Chrome on Android**, and that's the target browser for the receiver view. The app opens on the **idle** screen.
 2. Staff tap **Join call**. That is the "ready" signal and the consent. The receiver's camera turns on (self-view in the corner), the tablet connects to the group's room and the receiver is marked **available** (receiver state: _in call, waiting_).
-3. The group's callers get a push notification: "{displayName} is ready for a call."
+3. Callers with the app open see that the receiver is available ("{displayName} is ready for a call"). (Notifications are deferred as a maybe.)
 4. The first caller to press their **Join call** is connected automatically, with no answering on the receiver's side. The caller's video goes full screen and the receiver's self-view stays in the corner (_in call, active_).
 5. When the caller hangs up, the receiver goes back to **idle** (camera off, unavailable) showing "The call has ended." with the Join call button. Staff tap Join call to make the receiver available again.
 6. If nobody calls within the ready window, the receiver goes back to **idle**: camera off, disconnected, **unavailable**.
@@ -39,7 +39,7 @@ A very simple video-calling system so family can call a family member in care wh
 ## Groups, users and roles (agreed)
 
 - **Group:** has a slug, which is its URL: `/<group>/`. **Everyone in the group uses the same URL.** There's no separate tablet URL.
-- **Group display name** (agreed): each group has a `displayName` for the person being called (e.g. "Grandma"), used in the UI and notifications ("{displayName} is ready for a call").
+- **Group display name** (agreed): each group has a `displayName` for the person being called (e.g. "Grandma"), used in the UI ("{displayName} is ready for a call").
 - **Ready window** (agreed): one app-wide setting (env var), default 30 minutes. Not per group.
 - **Membership:** (user email, group, role). Roles:
   - **receiver:** the person being called, on the tablet. Shows the receiver view (auto-answer, full screen).
@@ -50,7 +50,7 @@ A very simple video-calling system so family can call a family member in care wh
 - The page asks the Worker "who am I in this group?" and renders the matching view. Non-members get a 404.
 - **The receiver is an ordinary user.** It logs in the same way as everyone else. No separate device/pairing records.
 - **Storage:** start with a JSON env var/secret; move to **D1** later, with an admin UI to assign users roles on groups. Code reads through a small `Directory` interface so the storage swap doesn't touch the rest of the app.
-- Each group gets its own Durable Object room (`idFromName(groupSlug)`): state, calls and push subscriptions are fully separate per group.
+- Each group gets its own Durable Object room (`idFromName(groupSlug)`): state and calls are fully separate per group.
 
 ## Auth (agreed)
 
@@ -68,17 +68,16 @@ A very simple video-calling system so family can call a family member in care wh
 - **Worker + one Durable Object ("room") per group**
   - Holds WebSocket connections from receiver and callers (signalling).
   - Tracks availability state, enforces single caller and the ready-window timeout (DO alarm).
-  - Sends Web Push "ready" notifications (VAPID, WebCrypto; the `web-push` npm package doesn't run on Workers) to the group's subscribed callers.
   - Issues short-lived Cloudflare TURN credentials.
 - **Media:** peer-to-peer WebRTC with **Cloudflare Realtime TURN** as fallback. The caller always offers and the receiver always answers. Swap to Realtime SFU later only if multi-party calls are wanted. (Pricing: $0.05/GB egress after 1,000 GB/month free, shared with SFU; expected usage is well inside the free tier.)
 - **Web app** (static assets on the Worker, installable PWA). One app, with the view chosen by role:
-  - **Caller view:** own camera in the corner during a call (same layout as the receiver). Shows available / not available; Join call button only enabled when the receiver is waiting. Registers for Web Push (on iPhone this requires adding to home screen first).
+  - **Caller view:** own camera in the corner during a call (same layout as the receiver). Shows available / not available; Join call button only enabled when the receiver is waiting.
   - **Receiver view:** full screen. Follows the screen states above: _idle_ → Join call → _waiting_ → auto-accepts the incoming call (gentle chime) → _active_ → call ends → _idle_; timeout → _idle_.
 
 ## Code structure (proposed)
 
 - `src/shared/`: protocol message types + type guards.
-- `src/worker/`: routing, auth, directory, TURN, push; `room.ts` is a thin DO shell over a pure `room-state.ts` state machine that returns new state + effects.
+- `src/worker/`: routing, auth, directory, TURN; `room.ts` is a thin DO shell over a pure `room-state.ts` state machine that returns new state + effects.
 - `src/client/`: shared lib (reconnecting socket, peer wrapper) + caller and receiver views.
 - Principle: keep logic pure and testable; DO/DOM/WebRTC code are thin adapters.
 - **UI approach (agreed by default):** no framework. Plain DOM + TypeScript: each view has a `State` union and a `render(state)` that rebuilds its content with `replaceChildren`, plus small `element` / `video` helpers in `dom.ts`. Plain CSS in `style.css`. Revisit only if the UI grows enough to justify a framework.
@@ -181,14 +180,6 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 - [ ] 24. Call recovery: ICE restart after a network blip mid-call
 - [ ] 25. Connection status: caller sees "reconnecting…"; also show "Connecting…" until media actually flows and "Couldn't connect" if the peer connection fails (today the call screen appears as soon as the remote track exists, even if no video arrives)
 
-#### G. Notifications (per group)
-
-- [ ] 26. Subscribe: caller turns notifications on or off; subscription stored
-- [ ] 27. Send push: "{displayName} is ready for a call" when the receiver becomes available
-- [ ] 28. Open from notification: tapping opens the app
-- [ ] 29. Clean up: expired subscriptions removed
-- [ ] 30. iPhone guidance: add-to-home-screen prompt
-
 #### H. Polish and trial
 
 - [ ] 31. Installable app: manifest; home screen icon; receiver launches full screen
@@ -203,13 +194,13 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 
 ## Deferred / later
 
+- **Maybe: notifications.** Tell callers when the receiver becomes available ("{displayName} is ready for a call"), so they don't need the app open. Likely Web Push from the room (VAPID, implemented with WebCrypto, since the `web-push` npm package doesn't run on Workers); on iPhone this needs the app added to the home screen. Possibly a backup channel (SMS, ntfy or Telegram) if a push isn't seen. Dropped from the build plan (was phase G, steps 26–30).
 - **Maybe:** hidden staff exit on the receiver (e.g. 5 s corner long-press → back to idle). Not sure it's needed; revisit after the real-tablet trial.
 - Users/roles in D1 with an admin UI (start with env var).
 - Receiver UI details (the owner will revisit).
 - Optional scheduled auto-answer without staff opening the app (admin setting, off by default).
 - Receiver heartbeat / "last seen" on the caller view.
 - Quiet hours.
-- Backup alert if push isn't seen (SMS via Twilio, or ntfy/Telegram).
 - Call history for group admins (who called, when, how long).
 
 ## Non-code considerations
@@ -220,7 +211,7 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 ## Preferences
 
 - Keep it minimal and boring: few dependencies, plain TypeScript, no frameworks unless clearly worth it.
-- Explain any Cloudflare setup steps (Access policy, TURN key, VAPID keys, secrets, API tokens) as clear dashboard / `wrangler` instructions.
+- Explain any Cloudflare setup steps (Access policy, TURN key, secrets, API tokens) as clear dashboard / `wrangler` instructions.
 
 ## Development rules (agreed)
 
