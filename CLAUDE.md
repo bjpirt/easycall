@@ -140,7 +140,7 @@ A very simple video-calling system so family can call a family member in care wh
 
 ## Build plan
 
-- **Stage 1 (now):** web app, Worker, Durable Objects. Must be testable end-to-end in two browser tabs locally (`wrangler dev`) before touching the real tablet.
+- **Stage 1 (done):** web app, Worker, Durable Objects. Must be testable end-to-end in two browser tabs locally (`wrangler dev`) before touching the real tablet.
 
 ### Stage 1 steps (agreed; each does one thing)
 
@@ -202,7 +202,7 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 - [x] 32. Screen stays awake during the ready window and calls (Wake Lock)
 - [x] 33. Member names (agreed design): every member has a per-group `name`; the group's `displayName` goes, and the **receiver's name** is used instead ("Call Grandma", "Grandma is ready for a call"). Directory format: `groups.<key>.members.<email> = { "role": …, "name": … }`; the key stays the URL. Strict rules: names required, exactly one receiver per group. Names shown: a label over the other person's video during a call; "Ben is calling…" on the tablet while connecting; "Grandma is in a call with Ben" for other callers; "Signed in as Ben" on the caller's idle screen
 - [x] 34. Automatic updates: devices always pick up the latest deploy
-- [~] 35. Real-tablet trial: care home Wi-Fi/device checks; handover notes. The acceptance tests are in **`docs/manual-tests.md`**: generic and runnable by anyone, a "Before you start" list, then 14 numbered tests that build on each other, each with **Do** and **Expect**. Record results in its Results table. Keep it in step with user-facing changes
+- [x] 35. Real-tablet trial (done by the owner, with handover notes): care home Wi-Fi/device checks; handover notes. The acceptance tests are in **`docs/manual-tests.md`**: generic and runnable by anyone, a "Before you start" list, then 14 numbered tests that build on each other, each with **Do** and **Expect**. Record results in its Results table. Keep it in step with user-facing changes
 - [x] 36. Home page: `/` explains easyCall with a big Sign in button; once signed in you go straight to your group. Each person is in at most one group (enforced by the directory)
 - [x] 37. Rejoin after reopening: a caller who closes the app mid-call (without hanging up) and reopens it within the grace period can press Join Call to get back into the call. Reconnecting pages are matched by a per-page id, so another device signed in as the same caller can never take over the call
 - [x] 38. Button labels: "Re-join Call" when rejoining a dropped call; "End Call" instead of "Hang up"; "Join Call" (was "Join call") to match
@@ -223,7 +223,7 @@ Reordered (agreed) so the session cookie exists before the Access login: local d
 - [x] 46. The room re-checks membership (reading `env.DIRECTORY` itself) on `join`, and closes sockets of people no longer in the group, so removing someone takes effect even on an open page
 - [x] 47. Security headers on every Worker response: a strict CSP (`frame-ancestors 'none'`; a nonce for the home page's inline style), `nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`.
 - [x] 48. CI hardening: `permissions: contents: read`, actions pinned to commit SHAs (kept current by Dependabot), Dependabot for npm
-- Outside the code (owner): a dedicated receiver mailbox with two-factor sign-in (whoever can sign in as the receiver gets the calls); a Cloudflare billing alert (TURN credentials last 24 h and any member could reuse them as a relay); keep the Access allow-list tight and remove people promptly
+- [x] Outside the code (done by the owner): a dedicated receiver mailbox with two-factor sign-in (whoever can sign in as the receiver gets the calls); the Access allow-list kept tight, with people removed promptly; Dependabot alerts on in the repo; a Cloudflare **billing alert on the bill amount** (Cloudflare only alerts on spend, not bandwidth), set just above the normal monthly bill. TURN beyond its free 1,000 GB costs $0.05/GB, so a $1 margin fires about 20 GB over. If it fires: check Realtime → TURN usage, and if it's unexpected, roll the TURN key (new key, `wrangler secret put TURN_KEY_ID` / `TURN_KEY_API_TOKEN`, delete the old one); calls carry on, since they fetch fresh credentials at each Join Call. A per-member limit on `/api/ice-servers` is the code-side option if it's ever needed
 - Accepted for now: the 1-year bearer cookie (no per-device revocation; removing someone from the directory or rotating `SESSION_SECRET` are the levers); no per-member limits on room connections or message size (members are trusted); peer-to-peer calls reveal each side's public IP to the other (relay-only would hide it, at a cost); directory problems log emails
 
 ### Later stages
